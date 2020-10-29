@@ -56,7 +56,7 @@ public Plugin myinfo = {
 public void OnPluginStart() 
 {
 	// Events
-	HookEvent("arena_round_start", Event_RoundStart);
+	HookEvent("teamplay_round_start", Event_RoundStart);
 	HookEvent("teamplay_round_win", Event_RoundEnd);
 	HookEvent("player_death", Event_OnDeath);
 
@@ -119,7 +119,6 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 		if(!player)
 			break;
 
-		//selectedAsZombie[player] = true;
 		Zombie_Setup(player);
 		PrintCenterText(player, "You have been selected to become a ZOMBIE!");
 	}
@@ -130,6 +129,16 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 		{
 			Survivor_Setup(i);
 		}
+	}
+
+	while (GetTeamClientCount(ZOMBIE_TEAM) > 6)
+	{
+		int player = GetClientWithLeastQueuePoints(selectedAsZombie, ZOMBIE_TEAM);
+		if(!player)
+			break;
+
+		Zombie_Setup(player);
+		PrintCenterText(player, "You have been selected to become a ZOMBIE!");
 	}
 
 	roundStarted = true;
@@ -255,7 +264,7 @@ public Action Command_Next(int client, int args)
 
 	while(j >= 0)
 	{
-		players[j] = GetClientWithLeastQueuePoints(checked, true);
+		players[j] = GetClientWithLeastQueuePoints(checked);
 
 		if(!players[j])
 		{
@@ -375,16 +384,16 @@ void Survivor_Setup(const int client)
 	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 2)); 
 }
 
-int GetClientWithLeastQueuePoints(bool[] arrayType, bool pref=false)
+int GetClientWithLeastQueuePoints(bool[] arrayType, int fromTeam=0)
 {
 	int chosen = 0;
 	queuePoints[0] = 99999;
 
-	if(pref)
+	if(fromTeam)
 	{
 		for(int i = 1; i <= MaxClients; i++)
 		{
-			if(IsClientInGame(i) && queuePoints[i] <= queuePoints[chosen] && !arrayType[i])
+			if(IsClientInGame(i) && queuePoints[i] <= queuePoints[chosen] && GetClientTeam(i) == fromTeam && !arrayType[i])
 			{
 				chosen = i;
 			}
@@ -392,22 +401,11 @@ int GetClientWithLeastQueuePoints(bool[] arrayType, bool pref=false)
 	}
 	else 
 	{
-		for(int i = 1; i <= MaxClients; i++) // Prefer to take from blue
+		for(int i = 1; i <= MaxClients; i++)
 		{
-			if(IsClientInGame(i) && queuePoints[i] <= queuePoints[chosen] && GetClientTeam(i) == ZOMBIE_TEAM && !arrayType[i])
+			if(IsClientInGame(i) && queuePoints[i] <= queuePoints[chosen] && !arrayType[i])
 			{
 				chosen = i;
-			}
-		}
-
-		if(!chosen)
-		{
-			for(int i = 1; i <= MaxClients; i++)
-			{
-				if(IsClientInGame(i) && queuePoints[i] <= queuePoints[chosen] && !arrayType[i])
-				{
-					chosen = i;
-				}
 			}
 		}
 	}
