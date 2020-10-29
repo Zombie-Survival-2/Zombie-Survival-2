@@ -58,6 +58,7 @@ public void OnPluginStart()
 	HookEvent("teamplay_round_start", Event_RoundStart);
 	HookEvent("teamplay_round_win", Event_RoundEnd);
 	HookEvent("player_death", Event_OnDeath);
+	HookEvent("player_spawn", Event_OnSpawn);
 
 	// Convars
 	gcv_debug = CreateConVar("sm_zs2_debug", "1", "Disables or enables debug messages in chat, set to 0 as default before release.");
@@ -86,7 +87,7 @@ public void OnPluginStart()
 
 public void OnConfigsExecuted()
 {
-	InsertServerTag("zs2");
+	InsertServerTag("zombies,zombie survival 2,zs2");
 
 	// Timers
 	CreateTimer(gcv_timerPoints.FloatValue, Timer_GiveQueuePoints, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
@@ -195,6 +196,16 @@ public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 	}
 
 	return Plugin_Continue;
+}
+
+public Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
+{
+	int player = GetClientOfUserId(event.GetInt("userid"));
+	int team = GetClientTeam(player);
+	if (team == TEAM_ZOMBIES)
+	{
+		Zombie_Setup(player);
+	}
 }
 
 void SurvivorToZombie(any userid)
