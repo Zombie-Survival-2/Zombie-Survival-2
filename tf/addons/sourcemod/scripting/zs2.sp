@@ -133,9 +133,9 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 		}
 	}
 
-	while (GetTeamClientCount(ZOMBIE_TEAM) > 6)
+	while (GetTeamClientCount(TEAM_ZOMBIES) > 6)
 	{
-		int player = GetClientWithLeastQueuePoints(selectedAsZombie, ZOMBIE_TEAM);
+		int player = GetClientWithLeastQueuePoints(selectedAsZombie, TEAM_ZOMBIES);
 		if (!player)
 			break;
 
