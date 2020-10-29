@@ -1,6 +1,7 @@
 /* Definitions
 ==================================================================================================== */
 
+#define DEBUG 1
 #pragma semicolon 1
 
 #include <sourcemod>
@@ -27,13 +28,19 @@ enum
 	ZOMBIE_TEAM = 3
 };
 
-ConVar gcv_fRatio, gcv_MinDamage;
-bool firstConnection[MAXPLAYERS+1] = {true, ...},
+ConVar gcv_Ratio, 
+	gcv_MinDamage, 
+	gcv_timerPoints,
+	gcv_playtimePoints,
+	gcv_killPoints,
+	gcv_assistPoints;
+
+bool roundStarted,
+	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsZombie[MAXPLAYERS+1];
 
-bool roundStarted;
-
-int queuePoints[MAXPLAYERS+1], damageDealt[MAXPLAYERS+1];
+int queuePoints[MAXPLAYERS+1], 
+	damageDealt[MAXPLAYERS+1];
 
 public Plugin myinfo = {
 	name = "Zombie Survival 2",
@@ -54,12 +61,18 @@ public void OnPluginStart()
 	HookEvent("player_death", Event_OnDeath);
 
 	// Convars
-	gcv_fRatio = CreateConVar("sm_zs2_ratio", "0.334", "Ratio for zombies against survivors (blue / red = 0.334)", _, true, 0.0, true, 1.0);
+	gcv_Ratio = CreateConVar("sm_zs2_ratio", "0.334", "Ratio for zombies against survivors (blue / red = 0.334)", _, true, 0.0, true, 1.0);
 	gcv_MinDamage = CreateConVar("sm_zs2_mindamage", "200", "Minimum damage to earn queue points.", _, true, 0.0);
+	gcv_timerPoints = CreateConVar("sm_zs2_pointsinterval", "30.0", "Timer Interval for giving queue points", _, true, 0.0);
+	gcv_playtimePoints = CreateConVar("sm_zs2_playtimepoints", "5", "X points for playing on the server", _, true, 0.0);
+	gcv_killPoints = CreateConVar("sm_zs2_killpoints", "5", "X points when zombie kills", _, true, 0.1);
+	gcv_assistPoints = CreateConVar("sm_zs2_gcv_assistpoints", "3", "X points when zombie assists", _, true, 0.0);
 
 	// Commands
 	RegConsoleCmd("sm_zs", Command_ZS2);
 	RegConsoleCmd("sm_zs2", Command_ZS2);
+	RegConsoleCmd("sm_zs2_next", Command_Next);
+	RegConsoleCmd("sm_zs2next", Command_Next);
 
 	// Commands Listeners
 	AddCommandListener(Listener_JoinTeam, "jointeam");
@@ -72,9 +85,12 @@ public void OnPluginStart()
 public void OnConfigsExecuted() 
 {
 	InsertServerTag("zs2");
+
+	// Timers
+	CreateTimer(gcv_timerPoints.FloatValue, Timer_GiveQueuePoints, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
 
-public void OnClientPutInServer(int client) 
+public void OnClientPutInServer(int client)
 {
 	SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
 	CreateTimer(3.0, Timer_DisplayIntro, client);
@@ -83,27 +99,27 @@ public void OnClientPutInServer(int client)
 public void OnClientDisconnect(int client)
 {
 	queuePoints[client] = 0;
+	damageDealt[client] = 0;
 	selectedAsZombie[client] = false;
 	firstConnection[client] = true;
 }
 
 public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
-	if(GetClientCount() <= RoundToNearest(1 / gcv_fRatio.FloatValue))
+	if(GetClientCount() <= RoundToNearest(1 / gcv_Ratio.FloatValue))
 	{
 		return;
 	}
 
-	int required = GetClientCount() / RoundToNearest(1 / gcv_fRatio.FloatValue + 1);
+	int required = GetClientCount() / RoundToNearest(1 / gcv_Ratio.FloatValue + 1);
 
 	for(int i = 0; i < required; i++)
 	{
-		int player = GetClientWithLeastQueuePoints();
-		PrintToChatAll("%N", player);
-
+		int player = GetClientWithLeastQueuePoints(selectedAsZombie);
 		if(!player)
 			break;
 
+		//selectedAsZombie[player] = true;
 		Zombie_Setup(player);
 		PrintCenterText(player, "You have been selected to become a ZOMBIE!");
 	}
@@ -138,11 +154,36 @@ public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 {
 	int victim = GetClientOfUserId(event.GetInt("userid"));
+	int assister = GetClientOfUserId(event.GetInt("assister"));
+	int attacker = GetClientOfUserId(event.GetInt("attacker"));
+
+	// This part deals with victim only
+
+	int team = GetClientTeam(victim);
 
 	if(roundStarted && GetClientTeam(victim) == SURVIVE_TEAM)
 	{
 		RequestFrame(SurvivorToZombie, GetClientUserId(victim));
 	}
+
+	if(attacker < 1 || !IsClientInGame(attacker) || victim == attacker)
+	{
+		return Plugin_Continue;
+	}
+
+	// This part deals with attacker and victim
+
+	if(team == SURVIVE_TEAM)
+	{
+		queuePoints[attacker] += gcv_killPoints.IntValue;
+
+		if(assister && IsClientInGame(assister))
+		{
+			queuePoints[assister] += gcv_assistPoints.IntValue;
+		}
+	}
+
+	return Plugin_Continue;
 }
 
 void SurvivorToZombie(any userid)
@@ -200,6 +241,52 @@ public Action Command_ZS2(int client, int args)
 	return Plugin_Handled;
 }
 
+public Action Command_Next(int client, int args)
+{
+	if (client == 0) 
+	{
+		PrintToServer("%s In-game only!", MESSAGE_PREFIX_NO_COLOR);
+		return Plugin_Handled;
+	}
+	
+	bool[] checked = new bool[MaxClients+1];
+	int[] players = new int[MaxClients+1];
+	int j = MaxClients;
+
+	while(j >= 0)
+	{
+		players[j] = GetClientWithLeastQueuePoints(checked, true);
+
+		if(!players[j])
+		{
+			j++;
+			break;
+		}
+
+		//checked[players[j]] = true;
+		j--;
+	}
+
+	Menu menu = new Menu(Handler_Nothing);
+	menu.SetTitle("%s Queue Points", MESSAGE_PREFIX_NO_COLOR);
+	char display[64];
+
+	for(int i = j; i < MaxClients + 1; i++) // the array's size = MaxClients + 1
+	{
+		#if DEBUG
+			PrintToChatAll("players[%i] = %i", i, players[i]);
+		#endif
+
+		FormatEx(display, sizeof(display), "%N - %i points", players[i], queuePoints[players[i]]);
+		menu.AddItem("x", display, players[i] == client ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED);
+	}
+
+	menu.Display(client, 30);
+	return Plugin_Handled;
+}
+
+public int Handler_Nothing(Menu menu, MenuAction action, int client, int param2) { }
+
 /* Functions + Timers
 ==================================================================================================== */
 
@@ -247,6 +334,18 @@ public Action Timer_CalcQueuePoints(Handle timer)
 	}
 }
 
+public Action Timer_GiveQueuePoints(Handle timer)
+{
+	for(int i = 1; i <= MaxClients; i++)
+	{
+		if(IsClientInGame(i) && GetClientTeam(i) == ZOMBIE_TEAM)
+		{
+			queuePoints[i] += gcv_playtimePoints.IntValue;
+		}
+	}
+	return Plugin_Continue;
+}
+
 void Zombie_Setup(const int client)
 {
 	if(GetClientTeam(client) != ZOMBIE_TEAM)
@@ -276,33 +375,46 @@ void Survivor_Setup(const int client)
 	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 2)); 
 }
 
-int GetClientWithLeastQueuePoints()
+int GetClientWithLeastQueuePoints(bool[] arrayType, bool pref=false)
 {
 	int chosen = 0;
-	queuePoints[0] = 9999;
+	queuePoints[0] = 99999;
 
-	for(int i = 1; i <= MaxClients; i++) // Prefer to take from blue
-	{
-		if(IsClientInGame(i) && queuePoints[i] <= queuePoints[chosen] && GetClientTeam(i) == ZOMBIE_TEAM && !selectedAsZombie[i])
-		{
-			chosen = i;
-		}
-	}
-
-	if(!chosen)
+	if(pref)
 	{
 		for(int i = 1; i <= MaxClients; i++)
 		{
-			if(IsClientInGame(i) && queuePoints[i] <= queuePoints[chosen] && !selectedAsZombie[i])
+			if(IsClientInGame(i) && queuePoints[i] <= queuePoints[chosen] && !arrayType[i])
 			{
 				chosen = i;
+			}
+		}
+	}
+	else 
+	{
+		for(int i = 1; i <= MaxClients; i++) // Prefer to take from blue
+		{
+			if(IsClientInGame(i) && queuePoints[i] <= queuePoints[chosen] && GetClientTeam(i) == ZOMBIE_TEAM && !arrayType[i])
+			{
+				chosen = i;
+			}
+		}
+
+		if(!chosen)
+		{
+			for(int i = 1; i <= MaxClients; i++)
+			{
+				if(IsClientInGame(i) && queuePoints[i] <= queuePoints[chosen] && !arrayType[i])
+				{
+					chosen = i;
+				}
 			}
 		}
 	}
 
 	if(chosen)
 	{
-		selectedAsZombie[chosen] = true;
+		arrayType[chosen] = true;
 	}
 
 	return chosen;
