@@ -30,9 +30,9 @@ public Plugin myinfo = {
 // Global Variables
 enum {
 	INVALID = 0,
-	TEAM_SPEC = 1,
-	SURVIVE_TEAM = 2,
-	ZOMBIE_TEAM = 3
+	TEAM_SPECTATORS = 1,
+	TEAM_SURVIVORS = 2,
+	TEAM_ZOMBIES = 3
 };
 bool roundStarted,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
@@ -55,7 +55,7 @@ ConVar gcv_debug,
 public void OnPluginStart()
 {
 	// Events
-	HookEvent("arena_round_start", Event_RoundStart);
+	HookEvent("teamplay_round_start", Event_RoundStart);
 	HookEvent("teamplay_round_win", Event_RoundEnd);
 	HookEvent("player_death", Event_OnDeath);
 
@@ -127,7 +127,7 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsClientInGame(i) && GetClientTeam(i) == ZOMBIE_TEAM && !selectedAsZombie[i])
+		if (IsClientInGame(i) && GetClientTeam(i) == TEAM_ZOMBIES && !selectedAsZombie[i])
 		{
 			Survivor_Setup(i);
 		}
@@ -162,7 +162,7 @@ public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 
 	int team = GetClientTeam(victim);
 
-	if (roundStarted && GetClientTeam(victim) == SURVIVE_TEAM)
+	if (roundStarted && GetClientTeam(victim) == TEAM_SURVIVORS)
 	{
 		RequestFrame(SurvivorToZombie, GetClientUserId(victim));
 	}
@@ -174,7 +174,7 @@ public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 
 	// This part deals with attacker and victim
 
-	if (team == SURVIVE_TEAM)
+	if (team == TEAM_SURVIVORS)
 	{
 		queuePoints[attacker] += gcv_killPoints.IntValue;
 
@@ -219,7 +219,7 @@ public Action Listener_JoinClass(int client, const char[] command, int args)
 		return Plugin_Continue;
 	}
 
-	if (GetClientTeam(client) != SURVIVE_TEAM)
+	if (GetClientTeam(client) != TEAM_SURVIVORS)
 		return Plugin_Handled;
 
 	return Plugin_Continue;
@@ -339,7 +339,7 @@ public Action Timer_GiveQueuePoints(Handle timer)
 {
 	for(int i = 1; i <= MaxClients; i++)
 	{
-		if (IsClientInGame(i) && GetClientTeam(i) == ZOMBIE_TEAM)
+		if (IsClientInGame(i) && GetClientTeam(i) == TEAM_ZOMBIES)
 		{
 			queuePoints[i] += gcv_playtimePoints.IntValue;
 		}
@@ -349,14 +349,12 @@ public Action Timer_GiveQueuePoints(Handle timer)
 
 void Zombie_Setup(const int client)
 {
-	if (GetClientTeam(client) != ZOMBIE_TEAM)
+	if (GetClientTeam(client) != TEAM_ZOMBIES)
 	{
-		ChangeClientTeam(client, ZOMBIE_TEAM);
+		ChangeClientTeam(client, TEAM_ZOMBIES);
 	}
 
 	TF2_RespawnPlayer(client);
-	TF2_SetPlayerClass(client, TFClass_Medic, true, false);
-	TF2_RegeneratePlayer(client);
 
 	for (int i = 0; i < 6; i++)
 	{
@@ -371,7 +369,7 @@ void Zombie_Setup(const int client)
 
 void Survivor_Setup(const int client)
 {
-	ChangeClientTeam(client, SURVIVE_TEAM);
+	ChangeClientTeam(client, TEAM_SURVIVORS);
 	TF2_RespawnPlayer(client);
 	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 2)); 
 }
@@ -395,7 +393,7 @@ int GetClientWithLeastQueuePoints(bool[] arrayType, bool pref=false)
 	{
 		for (int i = 1; i <= MaxClients; i++) // Prefer to take from blue
 		{
-			if (IsClientInGame(i) && queuePoints[i] <= queuePoints[chosen] && GetClientTeam(i) == ZOMBIE_TEAM && !arrayType[i])
+			if (IsClientInGame(i) && queuePoints[i] <= queuePoints[chosen] && GetClientTeam(i) == TEAM_ZOMBIES && !arrayType[i])
 			{
 				chosen = i;
 			}
