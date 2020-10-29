@@ -41,7 +41,7 @@ int queuePoints[MAXPLAYERS+1],
 	damageDealt[MAXPLAYERS+1];
 
 // ConVars
-Convar gcv_debug,
+ConVar gcv_debug,
 	gcv_Ratio, 
 	gcv_MinDamage, 
 	gcv_timerPoints,
@@ -178,7 +178,7 @@ public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 	{
 		queuePoints[attacker] += gcv_killPoints.IntValue;
 
-		if(assister && IsClientInGame(assister))
+		if (assister && IsClientInGame(assister))
 		{
 			queuePoints[assister] += gcv_assistPoints.IntValue;
 		}
@@ -273,7 +273,7 @@ public Action Command_Next(int client, int args)
 
 	for (int i = j; i < MaxClients + 1; i++) // the array's size = MaxClients + 1
 	{
-		if (sm_zs2_debug.BoolValue)
+		if (gcv_debug.BoolValue)
 		{
 			DebugText("Player %i on queue menu is client %i", i, players[i]);
 		}
@@ -425,7 +425,7 @@ int GetClientWithLeastQueuePoints(bool[] arrayType, bool pref=false)
 ==================================================================================================== */
 
 public void DebugText(const char[] text, any ...) {
-	if (sm_zs2_debug.BoolValue) {
+	if (gcv_debug.BoolValue) {
 		int len = strlen(text) + 255;
 		char[] format = new char[len];
 		VFormat(format, len, text, 2);
