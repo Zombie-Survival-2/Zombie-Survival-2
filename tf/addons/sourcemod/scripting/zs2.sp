@@ -118,7 +118,7 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 	for (int i = 0; i < required; i++)
 	{
 		int player = GetClientWithLeastQueuePoints(selectedAsZombie);
-		if(!player)
+		if (!player)
 			break;
 
 		Zombie_Setup(player);
@@ -136,7 +136,7 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 	while (GetTeamClientCount(ZOMBIE_TEAM) > 6)
 	{
 		int player = GetClientWithLeastQueuePoints(selectedAsZombie, ZOMBIE_TEAM);
-		if(!player)
+		if (!player)
 			break;
 
 		Zombie_Setup(player);
@@ -389,11 +389,11 @@ int GetClientWithLeastQueuePoints(bool[] arrayType, int fromTeam=0)
 	int chosen = 0;
 	queuePoints[0] = 99999;
 
-	if(fromTeam)
+	if (fromTeam)
 	{
 		for (int i = 1; i <= MaxClients; i++)
 		{
-			if(IsClientInGame(i) && queuePoints[i] <= queuePoints[chosen] && GetClientTeam(i) == fromTeam && !arrayType[i])
+			if (IsClientInGame(i) && queuePoints[i] <= queuePoints[chosen] && GetClientTeam(i) == fromTeam && !arrayType[i])
 			{
 				chosen = i;
 			}
@@ -401,9 +401,9 @@ int GetClientWithLeastQueuePoints(bool[] arrayType, int fromTeam=0)
 	}
 	else 
 	{
-		for(int i = 1; i <= MaxClients; i++)
+		for (int i = 1; i <= MaxClients; i++)
 		{
-			if(IsClientInGame(i) && queuePoints[i] <= queuePoints[chosen] && !arrayType[i])
+			if (IsClientInGame(i) && queuePoints[i] <= queuePoints[chosen] && !arrayType[i])
 			{
 				chosen = i;
 			}
