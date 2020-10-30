@@ -59,6 +59,7 @@ public void OnPluginStart()
 	HookEvent("teamplay_round_start", Event_RoundStart);
 	HookEvent("teamplay_round_win", Event_RoundEnd);
 	HookEvent("player_death", Event_OnDeath);
+	HookEvent("player_spawn", Event_OnSpawn);
 
 	// Convars
 	gcv_Ratio = CreateConVar("sm_zs2_ratio", "0.334", "Ratio for zombies against survivors (blue / red = 0.334)", _, true, 0.0, true, 1.0);
@@ -198,6 +199,34 @@ public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 void SurvivorToZombie(any userid)
 {
 	Zombie_Setup(GetClientOfUserId(userid));
+}
+
+public Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
+{
+	int player = GetClientOfUserId(event.GetInt("userid"));
+	if(!player) 
+		return Plugin_Continue;
+
+	if (GetClientTeam(player) == ZOMBIE_TEAM)
+	{
+		RequestFrame(OnlyMelee, GetClientUserId(player));
+	}
+
+	return Plugin_Continue;
+}
+
+void OnlyMelee(any userid)
+{
+	int client = GetClientOfUserId(userid);
+	for(int i = 0; i < 6; i++)
+	{
+		if(i == 2)
+			continue;
+
+		TF2_RemoveWeaponSlot(client, i);
+	}
+
+	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 2)); 
 }
 
 public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom)
