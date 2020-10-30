@@ -262,7 +262,6 @@ public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &dam
 	return Plugin_Continue;
 }
 
-public Action Listener_JoinClass(int client, const char[] command, int args)
 public Action Listener_JoinTeam(int client, const char[] command, int args)
 {
 	if (firstConnection[client])
@@ -468,4 +467,31 @@ public void DebugText(const char[] text, any ...) {
 		CPrintToChatAll("{collectors}[ZS2 Debug] {white}%s", format);
 		PrintToServer("[FB Debug] %s", format);
 	}
+}
+
+/* EntFire()
+sm_entfire with updated syntax
+==================================================================================================== */
+
+stock bool EntFire(char[] strTargetname, char[] strInput, char strParameter[] = "", float flDelay = 0.0) {
+	char strBuffer[255];
+	Format(strBuffer, sizeof(strBuffer), "OnUser1 %s:%s:%s:%f:1", strTargetname, strInput, strParameter, flDelay);
+	int entity = CreateEntityByName("info_target");
+	if (IsValidEdict(entity)) {
+		DispatchSpawn(entity);
+		ActivateEntity(entity);
+		SetVariantString(strBuffer);
+		AcceptEntityInput(entity, "AddOutput");
+		AcceptEntityInput(entity, "FireUser1");
+		CreateTimer(0.0, Timer_DeleteEdict, entity);
+		return true;
+	}
+	return false;
+}
+
+public Action Timer_DeleteEdict(Handle timer, int entity) {
+	if (IsValidEdict(entity)) {
+		RemoveEdict(entity);
+	}
+	return Plugin_Stop;
 }
