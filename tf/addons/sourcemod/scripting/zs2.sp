@@ -57,6 +57,7 @@ public void OnPluginStart()
 	// Events
 	HookEvent("teamplay_round_start", Event_RoundStart);
 	HookEvent("teamplay_round_win", Event_RoundEnd);
+	HookEvent("teamplay_setup_finished", Event_SetupFinished);
 	HookEvent("player_death", Event_OnDeath);
 	HookEvent("player_spawn", Event_OnSpawn);
 
@@ -161,6 +162,11 @@ public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 	}
 
 	roundStarted = false;
+}
+
+public Action Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) {
+	// Set all resupply cabinets to only work for zombies
+	EntFire("func_regenerate", "SetTeam", "3");
 }
 
 public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
