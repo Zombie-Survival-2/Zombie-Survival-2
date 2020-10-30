@@ -1,7 +1,6 @@
 /* Definitions
 ==================================================================================================== */
 
-#define DEBUG 1
 #pragma semicolon 1
 
 #include <sourcemod>
@@ -20,28 +19,6 @@
 #define PLUGIN_VERSION "0.1"
 #define MOTD_VERSION "0.1"
 
-enum
-{
-	INVALID = 0,
-	TEAM_SPEC = 1,
-	SURVIVE_TEAM = 2,
-	ZOMBIE_TEAM = 3
-};
-
-ConVar gcv_Ratio, 
-	gcv_MinDamage, 
-	gcv_timerPoints,
-	gcv_playtimePoints,
-	gcv_killPoints,
-	gcv_assistPoints;
-
-bool roundStarted,
-	firstConnection[MAXPLAYERS+1] = {true, ...},
-	selectedAsZombie[MAXPLAYERS+1];
-
-int queuePoints[MAXPLAYERS+1], 
-	damageDealt[MAXPLAYERS+1];
-
 public Plugin myinfo = {
 	name = "Zombie Survival 2",
 	author = "Hagvan, Jack5, poonit & SirGreenman",
@@ -50,20 +27,47 @@ public Plugin myinfo = {
 	url = "https://github.com/Zombie-Survival-2"
 };
 
+// Global Variables
+enum {
+	INVALID = 0,
+	TEAM_SPECTATORS = 1,
+	TEAM_SURVIVORS = 2,
+	TEAM_ZOMBIES = 3
+};
+
+bool roundStarted,
+	firstConnection[MAXPLAYERS+1] = {true, ...},
+	selectedAsSurvivor[MAXPLAYERS+1];
+
+int queuePoints[MAXPLAYERS+1], 
+	damageDealt[MAXPLAYERS+1];
+
+// ConVars
+ConVar gcv_debug,
+	gcv_Ratio, 
+	gcv_MinDamage, 
+	gcv_timerPoints,
+	gcv_playtimePoints,
+	gcv_killPoints,
+	gcv_assistPoints;
+
 /* Events
 ==================================================================================================== */
 
-public void OnPluginStart() 
+public void OnPluginStart()
 {
 	// Events
+	HookEvent("teamplay_broadcast_audio", Event_Audio, EventHookMode_Pre);
 	HookEvent("teamplay_round_start", Event_RoundStart);
 	HookEvent("teamplay_round_win", Event_RoundEnd);
+	HookEvent("teamplay_setup_finished", Event_SetupFinished);
 	HookEvent("player_death", Event_OnDeath);
 	HookEvent("player_spawn", Event_OnSpawn);
 	HookEvent("post_inventory_application", Event_PlayerRegen);
 
 	// Convars
-	gcv_Ratio = CreateConVar("sm_zs2_ratio", "0.334", "Ratio for zombies against survivors (blue / red = 0.334)", _, true, 0.0, true, 1.0);
+	gcv_debug = CreateConVar("sm_zs2_debug", "1", "Disables or enables debug messages in chat, set to 0 as default before release.");
+	gcv_Ratio = CreateConVar("sm_zs2_ratio", "0.5", "Ratio for survivors against zombies (red / blue = 0.5)", _, true, 0.0, true, 1.0);
 	gcv_MinDamage = CreateConVar("sm_zs2_mindamage", "200", "Minimum damage to earn queue points.", _, true, 0.0);
 	gcv_timerPoints = CreateConVar("sm_zs2_pointsinterval", "30.0", "Timer Interval for giving queue points", _, true, 0.0);
 	gcv_playtimePoints = CreateConVar("sm_zs2_playtimepoints", "5", "X points for playing on the server", _, true, 0.0);
@@ -73,19 +77,29 @@ public void OnPluginStart()
 	// Commands
 	RegConsoleCmd("sm_zs", Command_ZS2);
 	RegConsoleCmd("sm_zs2", Command_ZS2);
-	RegConsoleCmd("sm_zs2_next", Command_Next);
+	RegConsoleCmd("sm_zsnext", Command_Next);
+	RegConsoleCmd("sm_zs_next", Command_Next);
 	RegConsoleCmd("sm_zs2next", Command_Next);
+	RegConsoleCmd("sm_zs2_next", Command_Next);
 
-	// Commands Listeners
+	// Command Listeners
 	AddCommandListener(Listener_JoinTeam, "jointeam");
 
 	// Translations
 	LoadTranslations("common.phrases");
 }
 
-public void OnConfigsExecuted() 
+public void OnMapStart() {
+	// Sounds precaching and downloading
+	PrecacheSound("zombiesurvival2/defeat.wav");
+	PrecacheSound("zombiesurvival2/victory.wav");
+	AddFileToDownloadsTable("sound/zombiesurvival2/defeat.wav");
+	AddFileToDownloadsTable("sound/zombiesurvival2/victory.wav");
+}
+
+public void OnConfigsExecuted()
 {
-	InsertServerTag("zs2");
+	InsertServerTag("zombies,zombie survival 2,zs2");
 
 	// Timers
 	CreateTimer(gcv_timerPoints.FloatValue, Timer_GiveQueuePoints, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
@@ -94,14 +108,14 @@ public void OnConfigsExecuted()
 public void OnClientPutInServer(int client)
 {
 	SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
-	CreateTimer(3.0, Timer_DisplayIntro, client);
+	CreateTimer(5.0, Timer_DisplayIntro, client);
 }
 
 public void OnClientDisconnect(int client)
 {
 	queuePoints[client] = 0;
 	damageDealt[client] = 0;
-	selectedAsZombie[client] = false;
+	selectedAsSurvivor[client] = false;
 	firstConnection[client] = true;
 }
 
@@ -112,34 +126,26 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 		return;
 	}
 
-	int required = GetClientCount() / RoundToNearest(1 / gcv_Ratio.FloatValue + 1);
+	int playerCount = GetClientCount(true);
+	int required = (playerCount <= 15) ? (playerCount / RoundToCeil(1 / gcv_Ratio.FloatValue + 1)) : 6;
 
 	for (int i = 0; i < required; i++)
 	{
-		int player = GetClientWithLeastQueuePoints(selectedAsZombie);
+		int player = GetClientWithMostQueuePoints(selectedAsSurvivor);
 		if (!player)
 			break;
 
-		Zombie_Setup(player);
-		PrintCenterText(player, "You have been selected to become a ZOMBIE!");
+		Survivor_Setup(player);
+		PrintCenterText(player, "You have been selected to become a SURVIVOR!");
 	}
 
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsClientInGame(i) && GetClientTeam(i) == ZOMBIE_TEAM && !selectedAsZombie[i])
+		if (IsClientInGame(i) && !selectedAsSurvivor[i])
 		{
-			Survivor_Setup(i);
+			Zombie_Setup(i);
+			PrintCenterText(i, "You have been selected to become a ZOMBIE!");
 		}
-	}
-
-	while (GetTeamClientCount(ZOMBIE_TEAM) > 6)
-	{
-		int player = GetClientWithLeastQueuePoints(selectedAsZombie, ZOMBIE_TEAM);
-		if (!player)
-			break;
-
-		Zombie_Setup(player);
-		PrintCenterText(player, "You have been selected to become a ZOMBIE!");
 	}
 
 	roundStarted = true;
@@ -148,17 +154,32 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
 	CreateTimer(3.0, Timer_CalcQueuePoints, _, TIMER_FLAG_NO_MAPCHANGE);
+	int team = event.GetInt("team");
 
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (IsClientInGame(i))
 		{
-			selectedAsZombie[i] = false;
+			selectedAsSurvivor[i] = false;
 			damageDealt[i] = 0;
+
+			if (team == GetClientTeam(i))
+			{
+				EmitSoundToClient(i, "zombiesurvival2/victory.wav", i);
+			}
+			else
+			{
+				EmitSoundToClient(i, "zombiesurvival2/defeat.wav", i);
+			}
 		}
 	}
 
 	roundStarted = false;
+
+	if (GetTeamClientCount(TEAM_SURVIVORS) == 1 && team == TEAM_ZOMBIES) // Important! Call switch after `roundStarted` is set to false.
+	{
+		CreateTimer(12.0, Timer_Switch, _, TIMER_FLAG_NO_MAPCHANGE);
+	}
 }
 
 public Action Event_PlayerRegen(Event event, const char[] name, bool dontBroadcast)
@@ -167,12 +188,19 @@ public Action Event_PlayerRegen(Event event, const char[] name, bool dontBroadca
 	if (!player) 
 		return Plugin_Continue;
 
-	if (GetClientTeam(player) == ZOMBIE_TEAM)
+	if (GetClientTeam(player) == TEAM_ZOMBIES)
 	{
 		RequestFrame(OnlyMelee, GetClientUserId(player));
 	}
 
 	return Plugin_Continue;
+}
+
+public Action Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) {
+	// Set all resupply cabinets to only work for zombies
+	char teamNum[1];
+	IntToString(TEAM_ZOMBIES, teamNum, 1);
+	EntFire("func_regenerate", "SetTeam", teamNum);
 }
 
 public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
@@ -185,7 +213,7 @@ public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 
 	int team = GetClientTeam(victim);
 
-	if (roundStarted && GetClientTeam(victim) == SURVIVE_TEAM)
+	if (roundStarted && GetClientTeam(victim) == TEAM_SURVIVORS)
 	{
 		RequestFrame(SurvivorToZombie, GetClientUserId(victim));
 	}
@@ -197,7 +225,7 @@ public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 
 	// This part deals with attacker and victim
 
-	if (team == SURVIVE_TEAM)
+	if (team == TEAM_SURVIVORS)
 	{
 		queuePoints[attacker] += gcv_killPoints.IntValue;
 
@@ -221,7 +249,7 @@ public Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 	if (!player) 
 		return Plugin_Continue;
 
-	if (GetClientTeam(player) == ZOMBIE_TEAM)
+	if (GetClientTeam(player) == TEAM_ZOMBIES)
 	{
 		RequestFrame(OnlyMelee, GetClientUserId(player));
 	}
@@ -263,6 +291,20 @@ public Action Listener_JoinTeam(int client, const char[] command, int args)
 	return Plugin_Handled;
 }
 
+public Action Event_Audio(Event event, const char[] name, bool dontBroadcast)
+{
+    char strAudio[40];
+    GetEventString(event, "sound", strAudio, sizeof(strAudio));
+    
+    if (strncmp(strAudio, "Game.Your", 9) == 0)
+    {
+        // Block victory and loss sounds
+        return Plugin_Handled;
+    }
+    
+    return Plugin_Continue;
+}
+
 /* Commands
 ==================================================================================================== */
 
@@ -270,7 +312,7 @@ public Action Command_ZS2(int client, int args)
 {
 	if (client == 0) 
 	{
-		PrintToServer("%s Because this command uses the MOTD, it cannot be executed from the server console.", MESSAGE_PREFIX_NO_COLOR);
+		PrintToServer("%s This command cannot be executed by the server console.", MESSAGE_PREFIX_NO_COLOR);
 		return Plugin_Handled;
 	}
 	char url[200];
@@ -284,37 +326,34 @@ public Action Command_Next(int client, int args)
 {
 	if (client == 0) 
 	{
-		PrintToServer("%s In-game only!", MESSAGE_PREFIX_NO_COLOR);
+		PrintToServer("%s This command cannot be executed by the server console.", MESSAGE_PREFIX_NO_COLOR);
 		return Plugin_Handled;
 	}
 	
 	bool[] checked = new bool[MaxClients+1];
 	int[] players = new int[MaxClients+1];
-	int j = MaxClients;
+	int j = 0;
 
-	while (j >= 0)
+	for ( ; j < MaxClients + 1; j++) // the array's size = MaxClients + 1
 	{
-		players[j] = GetClientWithLeastQueuePoints(checked);
+		players[j] = GetClientWithMostQueuePoints(checked);
 
 		if (!players[j])
 		{
-			j++;
 			break;
 		}
-
-		//checked[players[j]] = true;
-		j--;
 	}
 
 	Menu menu = new Menu(Handler_Nothing);
 	menu.SetTitle("%s Queue Points", MESSAGE_PREFIX_NO_COLOR);
 	char display[64];
 
-	for (int i = j; i < MaxClients + 1; i++) // the array's size = MaxClients + 1
+	for (int i = 0; i < j; i++)
 	{
-		#if DEBUG
-			PrintToChatAll("players[%i] = %i", i, players[i]);
-		#endif
+		if (gcv_debug.BoolValue)
+		{
+			DebugText("Player %i on queue menu is client %i", i, players[i]);
+		}
 
 		FormatEx(display, sizeof(display), "%N - %i points", players[i], queuePoints[players[i]]);
 		menu.AddItem("x", display, players[i] == client ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED);
@@ -373,11 +412,18 @@ public Action Timer_CalcQueuePoints(Handle timer)
 	}
 }
 
+public Action Timer_Switch(Handle timer)
+{
+	int player = GetClientWithMostQueuePoints(selectedAsSurvivor, false);
+	if (player) ChangeClientTeam(player, TEAM_SURVIVORS);
+	return Plugin_Continue;
+}
+
 public Action Timer_GiveQueuePoints(Handle timer)
 {
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsClientInGame(i) && GetClientTeam(i) == ZOMBIE_TEAM)
+		if (IsClientInGame(i) && GetClientTeam(i) == TEAM_ZOMBIES)
 		{
 			queuePoints[i] += gcv_playtimePoints.IntValue;
 		}
@@ -387,21 +433,19 @@ public Action Timer_GiveQueuePoints(Handle timer)
 
 void Zombie_Setup(const int client)
 {
-	if (GetClientTeam(client) != ZOMBIE_TEAM)
+	if (GetClientTeam(client) != TEAM_ZOMBIES)
 	{
-		ChangeClientTeam(client, ZOMBIE_TEAM);
+		ChangeClientTeam(client, TEAM_ZOMBIES);
 	}
 
 	TF2_RespawnPlayer(client);
-	TF2_SetPlayerClass(client, TFClass_Medic, true, false);
-	TF2_RegeneratePlayer(client);
 
 	for (int i = 0; i < 6; i++)
 	{
-		if (i == 2)
-			continue;
-
-		TF2_RemoveWeaponSlot(client, i);
+		if (i != 2)
+		{
+			TF2_RemoveWeaponSlot(client, i);
+		}
 	}
 
 	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 2)); 
@@ -409,41 +453,71 @@ void Zombie_Setup(const int client)
 
 void Survivor_Setup(const int client)
 {
-	ChangeClientTeam(client, SURVIVE_TEAM);
+	if (GetClientTeam(client) != TEAM_SURVIVORS)
+	{
+		ChangeClientTeam(client, TEAM_SURVIVORS);
+	}
+
 	TF2_RespawnPlayer(client);
-	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 2)); 
+	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 0)); 
 }
 
-int GetClientWithLeastQueuePoints(bool[] arrayType, int fromTeam=0)
+int GetClientWithMostQueuePoints(bool[] arrayType, bool mark=true)
 {
 	int chosen = 0;
-	queuePoints[0] = 99999;
 
-	if (fromTeam)
+	for (int i = 1; i <= MaxClients; i++)
 	{
-		for (int i = 1; i <= MaxClients; i++)
+		if (IsClientInGame(i) && queuePoints[i] >= queuePoints[chosen] && !arrayType[i])
 		{
-			if (IsClientInGame(i) && queuePoints[i] <= queuePoints[chosen] && GetClientTeam(i) == fromTeam && !arrayType[i])
-			{
-				chosen = i;
-			}
-		}
-	}
-	else 
-	{
-		for (int i = 1; i <= MaxClients; i++)
-		{
-			if (IsClientInGame(i) && queuePoints[i] <= queuePoints[chosen] && !arrayType[i])
-			{
-				chosen = i;
-			}
+			chosen = i;
 		}
 	}
 
-	if (chosen)
+	if (chosen && mark)
 	{
 		arrayType[chosen] = true;
 	}
 
 	return chosen;
+}
+
+/* DebugText()
+==================================================================================================== */
+
+public void DebugText(const char[] text, any ...) {
+	if (gcv_debug.BoolValue) {
+		int len = strlen(text) + 255;
+		char[] format = new char[len];
+		VFormat(format, len, text, 2);
+		CPrintToChatAll("{collectors}[ZS2 Debug] {white}%s", format);
+		PrintToServer("[FB Debug] %s", format);
+	}
+}
+
+/* EntFire()
+sm_entfire with updated syntax
+==================================================================================================== */
+
+stock bool EntFire(char[] strTargetname, char[] strInput, char strParameter[] = "", float flDelay = 0.0) {
+	char strBuffer[255];
+	Format(strBuffer, sizeof(strBuffer), "OnUser1 %s:%s:%s:%f:1", strTargetname, strInput, strParameter, flDelay);
+	int entity = CreateEntityByName("info_target");
+	if (IsValidEdict(entity)) {
+		DispatchSpawn(entity);
+		ActivateEntity(entity);
+		SetVariantString(strBuffer);
+		AcceptEntityInput(entity, "AddOutput");
+		AcceptEntityInput(entity, "FireUser1");
+		CreateTimer(0.0, Timer_DeleteEdict, entity);
+		return true;
+	}
+	return false;
+}
+
+public Action Timer_DeleteEdict(Handle timer, int entity) {
+	if (IsValidEdict(entity)) {
+		RemoveEdict(entity);
+	}
+	return Plugin_Stop;
 }
