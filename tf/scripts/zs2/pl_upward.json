@@ -1,0 +1,23 @@
+{
+	"t_setup": 30,
+	"t_round": 360,
+	"t_cp": false,
+	"oneleft": "zs2/oneleft.wav",
+	"heartbeat": false,
+	"cp_a": true,
+	"cp_d": true,
+	"cp_intro": "zs2/intro_cp/bloodharvest_m.wav",
+	"cp_last": "zs2/last/attacklast_m.wav",
+	"st_s": true,
+	"st_w": true,
+	"st_w_num": 120,
+	"st_sc": true,
+	"st_sc_num": 10,
+	"st_intro": "zs2/intro_st/bloodharvest_m22050.wav",
+	"st_sting": "zs2/intro_st/sting1_m22050.wav",
+	"st_last": "zs2/last/scavengelast.wav",
+	"st_cans": {
+		"1": [ 0, 0, 0 ],
+		"2": [ 123.45, -123.45, 0 ]
+	}
+}
