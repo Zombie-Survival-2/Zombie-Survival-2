@@ -154,7 +154,6 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
 	CreateTimer(3.0, Timer_CalcQueuePoints, _, TIMER_FLAG_NO_MAPCHANGE);
-	int team = event.GetInt("team");
 
 	int team = event.GetInt("team");
 	for (int i = 1; i <= MaxClients; i++)
