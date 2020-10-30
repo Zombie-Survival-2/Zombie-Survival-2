@@ -60,6 +60,7 @@ public void OnPluginStart()
 	HookEvent("teamplay_setup_finished", Event_SetupFinished);
 	HookEvent("player_death", Event_OnDeath);
 	HookEvent("player_spawn", Event_OnSpawn);
+	HookEvent("post_inventory_application", Event_PlayerRegen);
 
 	// Convars
 	gcv_debug = CreateConVar("sm_zs2_debug", "1", "Disables or enables debug messages in chat, set to 0 as default before release.");
@@ -80,7 +81,6 @@ public void OnPluginStart()
 
 	// Command Listeners
 	AddCommandListener(Listener_JoinTeam, "jointeam");
-	AddCommandListener(Listener_JoinClass, "joinclass");
 
 	// Translations
 	LoadTranslations("common.phrases");
@@ -154,7 +154,7 @@ public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if(IsClientInGame(i))
+		if (IsClientInGame(i))
 		{
 			selectedAsZombie[i] = false;
 			damageDealt[i] = 0;
@@ -164,9 +164,25 @@ public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 	roundStarted = false;
 }
 
+public Action Event_PlayerRegen(Event event, const char[] name, bool dontBroadcast)
+{
+	int player = GetClientOfUserId(event.GetInt("userid"));
+	if (!player) 
+		return Plugin_Continue;
+
+	if (GetClientTeam(player) == TEAM_ZOMBIES)
+	{
+		RequestFrame(OnlyMelee, GetClientUserId(player));
+	}
+
+	return Plugin_Continue;
+}
+
 public Action Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) {
 	// Set all resupply cabinets to only work for zombies
-	EntFire("func_regenerate", "SetTeam", "3");
+	char teamNum[1];
+	IntToString(TEAM_ZOMBIES, teamNum, 1);
+	EntFire("func_regenerate", "SetTeam", teamNum);
 }
 
 public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
@@ -246,17 +262,8 @@ public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &dam
 	return Plugin_Continue;
 }
 
-public Action Listener_JoinTeam(int client, const char[] command, int args)
-{
-	if (firstConnection[client])
-	{
-		return Plugin_Continue;
-	}
-
-	return Plugin_Handled;
-}
-
 public Action Listener_JoinClass(int client, const char[] command, int args)
+public Action Listener_JoinTeam(int client, const char[] command, int args)
 {
 	if (firstConnection[client])
 	{
@@ -264,10 +271,7 @@ public Action Listener_JoinClass(int client, const char[] command, int args)
 		return Plugin_Continue;
 	}
 
-	if (GetClientTeam(client) != TEAM_SURVIVORS)
-		return Plugin_Handled;
-
-	return Plugin_Continue;
+	return Plugin_Handled;
 }
 
 /* Commands
@@ -382,7 +386,7 @@ public Action Timer_CalcQueuePoints(Handle timer)
 
 public Action Timer_GiveQueuePoints(Handle timer)
 {
-	for(int i = 1; i <= MaxClients; i++)
+	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (IsClientInGame(i) && GetClientTeam(i) == TEAM_ZOMBIES)
 		{
