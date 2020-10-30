@@ -209,7 +209,7 @@ public Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 	if (!player) 
 		return Plugin_Continue;
 
-	if (GetClientTeam(player) == ZOMBIE_TEAM)
+	if (GetClientTeam(player) == TEAM_ZOMBIES)
 	{
 		RequestFrame(OnlyMelee, GetClientUserId(player));
 	}
