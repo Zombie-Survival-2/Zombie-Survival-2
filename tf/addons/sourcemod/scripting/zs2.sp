@@ -67,7 +67,8 @@ public void OnPluginStart()
 
 	// Convars
 	gcv_debug = CreateConVar("sm_zs2_debug", "1", "Disables or enables debug messages in chat, set to 0 as default before release.");
-	gcv_Ratio = CreateConVar("sm_zs2_ratio", "0.5", "Ratio for survivors against zombies (red / blue = 0.5)", _, true, 0.0, true, 1.0);
+	gcv_Ratio = CreateConVar("sm_zs2_ratio", "3", "Number of zombies per survivor.", _, true, 0.0, true, 1.0);
+	gcv_maxsurvivors = CreateConVar("sm_zs2_maxsurvivors", "6", "Maximum number of survivors allowed.", _, true, 0.0);
 	gcv_MinDamage = CreateConVar("sm_zs2_mindamage", "200", "Minimum damage to earn queue points.", _, true, 0.0);
 	gcv_timerPoints = CreateConVar("sm_zs2_pointsinterval", "30.0", "Timer Interval for giving queue points", _, true, 0.0);
 	gcv_playtimePoints = CreateConVar("sm_zs2_playtimepoints", "5", "X points for playing on the server", _, true, 0.0);
@@ -81,6 +82,10 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_zs_next", Command_Next);
 	RegConsoleCmd("sm_zs2next", Command_Next);
 	RegConsoleCmd("sm_zs2_next", Command_Next);
+	RegConsoleCmd("sm_zsreset", Command_Reset);
+	RegConsoleCmd("sm_zs_reset", Command_Reset);
+	RegConsoleCmd("sm_zs2reset", Command_Reset);
+	RegConsoleCmd("sm_zs2_reset", Command_Reset);
 
 	// Command Listeners
 	AddCommandListener(Listener_JoinTeam, "jointeam");
@@ -121,13 +126,18 @@ public void OnClientDisconnect(int client)
 
 public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
-	if (GetClientCount() <= RoundToNearest(1 / gcv_Ratio.FloatValue))
-	{
-		return;
-	}
-
 	int playerCount = GetClientCount(true);
-	int required = (playerCount <= 15) ? (playerCount / RoundToCeil(1 / gcv_Ratio.FloatValue + 1)) : 6;
+	int ratio = gcv_Ratio.IntValue;
+	if (ratio > 32 || ratio < 1)
+		ratio = 3;
+	int maxsurvivors = gcv_maxsurvivors.IntValue;
+	if (maxsurvivors > 32 || maxsurvivors < 1)
+		maxsurvivors = 6;
+	int required;
+	if (playerCount <= ratio * (maxsurvivors - ratio))
+		required = RoundToCeil(playerCount / ratio);
+	else
+		required = maxsurvivors;
 
 	for (int i = 0; i < required; i++)
 	{
@@ -136,7 +146,7 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 			break;
 
 		Survivor_Setup(player);
-		PrintCenterText(player, "You have been selected to become a SURVIVOR!");
+		CPrintToChat(player, "%s {haunted}You have been selected to become a {normal}Survivor.", MESSAGE_PREFIX);
 	}
 
 	for (int i = 1; i <= MaxClients; i++)
@@ -144,7 +154,7 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 		if (IsClientInGame(i) && !selectedAsSurvivor[i])
 		{
 			Zombie_Setup(i);
-			PrintCenterText(i, "You have been selected to become a ZOMBIE!");
+			CPrintToChat(i, "%s {haunted}You have been selected to become a {normal}Zombie.", MESSAGE_PREFIX);
 		}
 	}
 
@@ -215,7 +225,7 @@ public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 
 	if (roundStarted && GetClientTeam(victim) == TEAM_SURVIVORS)
 	{
-		RequestFrame(SurvivorToZombie, GetClientUserId(victim));
+		RequestFrame(Zombie_Setup, victim);
 	}
 
 	if (attacker < 1 || !IsClientInGame(attacker) || victim == attacker)
@@ -238,11 +248,6 @@ public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 	return Plugin_Continue;
 }
 
-void SurvivorToZombie(any userid)
-{
-	Zombie_Setup(GetClientOfUserId(userid));
-}
-
 public Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 {
 	int player = GetClientOfUserId(event.GetInt("userid"));
@@ -251,15 +256,15 @@ public Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 
 	if (GetClientTeam(player) == TEAM_ZOMBIES)
 	{
-		RequestFrame(OnlyMelee, GetClientUserId(player));
+		RequestFrame(OnlyMelee, player);
+		RequestFrame(RemoveWearable, player);
 	}
 
 	return Plugin_Continue;
 }
 
-void OnlyMelee(any userid)
+void OnlyMelee(int client)
 {
-	int client = GetClientOfUserId(userid);
 	for (int i = 0; i < 6; i++)
 	{
 		if (i == 2)
@@ -270,6 +275,16 @@ void OnlyMelee(any userid)
 
 	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 2)); 
 }
+
+void RemoveWearable(int client)
+{
+    int i = -1;
+    while ((i = FindEntityByClassname(i, "tf_wearable_demoshield")) != -1)
+    {
+        if (client != GetEntPropEnt(i, Prop_Send, "m_hOwnerEntity")) continue;
+        AcceptEntityInput(i, "Kill");
+    }
+} 
 
 public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom)
 {
@@ -360,6 +375,25 @@ public Action Command_Next(int client, int args)
 	}
 
 	menu.Display(client, 30);
+	return Plugin_Handled;
+}
+
+public Action Command_Reset(int client, int args)
+{
+	if (client == 0)
+	{
+		if (gcv_debug.BoolValue)
+		{
+			for (i = 0; i < MaxClients; i++)
+				queuePoints[i] = 0;
+			DebugText("All queue points reset to 0.");
+		}
+		else
+			PrintToServer("%s This command is too destructive to be run outside of debug mode.", MESSAGE_PREFIX_NO_COLOR);
+		return Plugin_Handled;
+	}
+	queuePoints[client] = 0;
+	CPrintToChat(i, "%s {haunted}Your queue points were reset to 0.", MESSAGE_PREFIX);
 	return Plugin_Handled;
 }
 
