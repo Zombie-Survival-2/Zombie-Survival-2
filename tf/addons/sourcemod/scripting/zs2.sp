@@ -198,24 +198,42 @@ public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 	return Plugin_Continue;
 }
 
-public Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
-{
-	int player = GetClientOfUserId(event.GetInt("userid"));
-	int team = GetClientTeam(player);
-	if (team == TEAM_ZOMBIES)
-	{
-		Zombie_Setup(player);
-	}
-}
-
 void SurvivorToZombie(any userid)
 {
 	Zombie_Setup(GetClientOfUserId(userid));
 }
 
+public Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
+{
+	int player = GetClientOfUserId(event.GetInt("userid"));
+	if (!player) 
+		return Plugin_Continue;
+
+	if (GetClientTeam(player) == ZOMBIE_TEAM)
+	{
+		RequestFrame(OnlyMelee, GetClientUserId(player));
+	}
+
+	return Plugin_Continue;
+}
+
+void OnlyMelee(any userid)
+{
+	int client = GetClientOfUserId(userid);
+	for (int i = 0; i < 6; i++)
+	{
+		if (i == 2)
+			continue;
+
+		TF2_RemoveWeaponSlot(client, i);
+	}
+
+	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 2)); 
+}
+
 public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom)
 {
-	if(victim < 1 || attacker < 1 || !IsClientInGame(attacker) || !IsClientInGame(victim) || victim == attacker)
+	if (victim < 1 || attacker < 1 || !IsClientInGame(attacker) || !IsClientInGame(victim) || victim == attacker)
 		return Plugin_Continue;
 
 	damageDealt[attacker] += view_as<int>(damage);
