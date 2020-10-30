@@ -55,6 +55,7 @@ ConVar gcv_debug,
 public void OnPluginStart()
 {
 	// Events
+	HookEvent("teamplay_broadcast_audio", Event_Audio, EventHookMode_Pre);
 	HookEvent("teamplay_round_start", Event_RoundStart);
 	HookEvent("teamplay_round_win", Event_RoundEnd);
 	HookEvent("teamplay_setup_finished", Event_SetupFinished);
@@ -84,6 +85,14 @@ public void OnPluginStart()
 
 	// Translations
 	LoadTranslations("common.phrases");
+}
+
+public void OnMapStart() {
+	// Sounds precaching and downloading
+	PrecacheSound("zombiesurvival2/defeat.wav");
+	PrecacheSound("zombiesurvival2/victory.wav");
+	AddFileToDownloadsTable("sound/zombiesurvival2/defeat.wav");
+	AddFileToDownloadsTable("sound/zombiesurvival2/victory.wav");
 }
 
 public void OnConfigsExecuted()
@@ -152,12 +161,21 @@ public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
 	CreateTimer(3.0, Timer_CalcQueuePoints, _, TIMER_FLAG_NO_MAPCHANGE);
 
+	int team = event.GetInt("team");
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (IsClientInGame(i))
 		{
 			selectedAsZombie[i] = false;
 			damageDealt[i] = 0;
+			if (team == GetClientTeam(i))
+			{
+				EmitSoundToClient(i, "zombiesurvival2/victory.wav", i);
+			}
+			else
+			{
+				EmitSoundToClient(i, "zombiesurvival2/defeat.wav", i);
+			}
 		}
 	}
 
@@ -271,6 +289,20 @@ public Action Listener_JoinTeam(int client, const char[] command, int args)
 	}
 
 	return Plugin_Handled;
+}
+
+public Action Event_Audio(Event event, const char[] name, bool dontBroadcast)
+{
+    char strAudio[40];
+    GetEventString(event, "sound", strAudio, sizeof(strAudio));
+    
+    if (strncmp(strAudio, "Game.Your", 9) == 0)
+    {
+        // Block victory and loss sounds
+        return Plugin_Handled;
+    }
+    
+    return Plugin_Continue;
 }
 
 /* Commands
