@@ -29,29 +29,25 @@ public Plugin myinfo = {
 };
 
 // Global Variables
-enum {
-	TEAM_SPECTATORS = 1,
-	TEAM_SURVIVORS = 2,
-	TEAM_ZOMBIES = 3
-};
-
 bool roundStarted,
 	waitingForPlayers,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
 
 int queuePoints[MAXPLAYERS+1], 
-	damageDealt[MAXPLAYERS+1];
+	damageDealt[MAXPLAYERS+1],
+	TEAM_SURVIVORS = 2,
+	TEAM_ZOMBIES = 3;
 
 // ConVars
 ConVar gcv_debug,
-	gcv_Ratio,
+	gcv_ratio,
 	gcv_maxsurvivors,
-	gcv_MinDamage, 
-	gcv_timerPoints,
-	gcv_playtimePoints,
-	gcv_killPoints,
-	gcv_assistPoints;
+	gcv_mindamage, 
+	gcv_timerpoints,
+	gcv_playtimepoints,
+	gcv_killpoints,
+	gcv_assistpoints;
 
 /* Events
 ==================================================================================================== */
@@ -69,13 +65,13 @@ public void OnPluginStart()
 
 	// Convars
 	gcv_debug = CreateConVar("sm_zs2_debug", "1", "Disables or enables debug messages in chat, set to 0 as default before release.");
-	gcv_Ratio = CreateConVar("sm_zs2_ratio", "3", "Number of zombies per survivor.", _, true, 0.0, true, 1.0);
+	gcv_ratio = CreateConVar("sm_zs2_ratio", "3", "Number of zombies per survivor.", _, true, 0.0, true, 1.0);
 	gcv_maxsurvivors = CreateConVar("sm_zs2_maxsurvivors", "6", "Maximum number of survivors allowed.", _, true, 0.0);
-	gcv_MinDamage = CreateConVar("sm_zs2_mindamage", "200", "Minimum damage to earn queue points.", _, true, 0.0);
-	gcv_timerPoints = CreateConVar("sm_zs2_pointsinterval", "30.0", "Timer Interval for giving queue points", _, true, 0.0);
-	gcv_playtimePoints = CreateConVar("sm_zs2_playtimepoints", "5", "X points for playing on the server", _, true, 0.0);
-	gcv_killPoints = CreateConVar("sm_zs2_killpoints", "5", "X points when zombie kills", _, true, 0.1);
-	gcv_assistPoints = CreateConVar("sm_zs2_gcv_assistpoints", "3", "X points when zombie assists", _, true, 0.0);
+	gcv_mindamage = CreateConVar("sm_zs2_mindamage", "200", "Minimum damage to earn queue points.", _, true, 0.0);
+	gcv_timerpoints = CreateConVar("sm_zs2_pointsinterval", "30.0", "Timer interval for giving queue points.", _, true, 0.0);
+	gcv_playtimepoints = CreateConVar("sm_zs2_playtimepoints", "5", "X points for playing on the server.", _, true, 0.0);
+	gcv_killpoints = CreateConVar("sm_zs2_killpoints", "5", "X points when zombie kills.", _, true, 0.1);
+	gcv_assistpoints = CreateConVar("sm_zs2_assistpoints", "3", "X points when zombie assists.", _, true, 0.0);
 
 	// Commands
 	RegConsoleCmd("sm_zs", Command_ZS2);
@@ -116,7 +112,7 @@ public void OnConfigsExecuted()
 	InsertServerTag("zs2");
 
 	// Timers
-	CreateTimer(gcv_timerPoints.FloatValue, Timer_GiveQueuePoints, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+	CreateTimer(gcv_timerpoints.FloatValue, Timer_GiveQueuePoints, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public void OnClientPutInServer(int client)
@@ -148,7 +144,7 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 	if (!waitingForPlayers)
 	{
 		int playerCount = GetClientCount(true);
-		int ratio = gcv_Ratio.IntValue;
+		int ratio = gcv_ratio.IntValue;
 		if (ratio > 32 || ratio < 1)
 			ratio = 3;
 		int maxsurvivors = gcv_maxsurvivors.IntValue;
@@ -288,11 +284,11 @@ public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 		{
 			EmitSoundToClient(victim, "zs2/death.mp3", victim);
 
-			queuePoints[attacker] += gcv_killPoints.IntValue;
+			queuePoints[attacker] += gcv_killpoints.IntValue;
 
 			if (assister && IsClientInGame(assister))
 			{
-				queuePoints[assister] += gcv_assistPoints.IntValue;
+				queuePoints[assister] += gcv_assistpoints.IntValue;
 			}
 		}
 	}
@@ -505,7 +501,7 @@ public Action Timer_CalcQueuePoints(Handle timer)
 {
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsClientInGame(i) && damageDealt[i] >= gcv_MinDamage.IntValue)
+		if (IsClientInGame(i) && damageDealt[i] >= gcv_mindamage.IntValue)
 		{
 			queuePoints[i] += 10;
 		}
@@ -527,7 +523,7 @@ public Action Timer_GiveQueuePoints(Handle timer)
 		{
 			if (IsClientInGame(i) && GetClientTeam(i) == TEAM_ZOMBIES)
 			{
-				queuePoints[i] += gcv_playtimePoints.IntValue;
+				queuePoints[i] += gcv_playtimepoints.IntValue;
 			}
 		}
 	}
