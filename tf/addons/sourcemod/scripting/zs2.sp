@@ -71,10 +71,11 @@ public void OnPluginStart()
 	HookEvent("player_death", Event_OnDeath);
 	HookEvent("player_spawn", Event_OnSpawn);
 	HookEvent("post_inventory_application", Event_PlayerRegen);
+	HookEvent("player_builtobject", Event_BuiltObject);
 
 	// ConVars
 	gcv_debug = CreateConVar("sm_zs2_debug", "1", "Disables or enables debug messages in chat, set to 0 as default before release.");
-	gcv_ratio = CreateConVar("sm_zs2_ratio", "3", "Number of zombies per survivor.", _, true, 0.0, true, 1.0);
+	gcv_ratio = CreateConVar("sm_zs2_ratio", "2", "Number of zombies per survivor.", _, true, 0.0, true, 1.0);
 	gcv_maxsurvivors = CreateConVar("sm_zs2_maxsurvivors", "6", "Maximum number of survivors allowed.", _, true, 0.0);
 	gcv_mindamage = CreateConVar("sm_zs2_mindamage", "200", "Minimum damage to earn queue points.", _, true, 0.0);
 	gcv_timerpoints = CreateConVar("sm_zs2_pointsinterval", "30.0", "Timer interval for giving queue points.", _, true, 0.0);
@@ -170,7 +171,7 @@ public void OnClientDisconnect(int client)
 
 public Action Timer_DisplayIntro(Handle timer, int client) 
 {
-	if (IsClientInGame(client)) // Required because player might disconnect before this fires
+	if (IsValidClient(client)) // Required because player might disconnect before this fires
 	{ 
 		CPrintToChat(client, "%s {haunted}This server is running {collectors}Zombie Survival 2 {normal}v%s!", MESSAGE_PREFIX, PLUGIN_VERSION);
 		CPrintToChat(client, "{haunted}If you would like to know more, type the command {normal}!zs2 {haunted}into chat.");
@@ -202,6 +203,7 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 		if (maxsurvivors > 32 || maxsurvivors < 1)
 			maxsurvivors = 6;
 		int required;
+		
 		if (playerCount <= ratio * (maxsurvivors - ratio))
 			required = RoundToCeil(float(playerCount) / float(ratio));
 		else
@@ -219,7 +221,7 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 
 		for (int i = 1; i <= MaxClients; i++)
 		{
-			if (IsClientInGame(i) && !selectedAsSurvivor[i])
+			if (IsValidClient(i) && !selectedAsSurvivor[i])
 			{
 				Zombie_Setup(i);
 				CPrintToChat(i, "%s {haunted}You have been selected to become a {normal}Zombie.", MESSAGE_PREFIX);
@@ -240,7 +242,7 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 			serverdata.GetString("st_intro", strval, sizeof(strval));
 			for (int i = 1; i <= MaxClients; i++)
 			{
-				if (IsClientInGame(i))
+				if (IsValidClient(i))
 					EmitSoundToClient(i, strval, i);
 			}
 			// Else play this sound to everyone if the player count has not grown
@@ -272,7 +274,7 @@ public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 	int team = event.GetInt("team");
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsClientInGame(i))
+		if (IsValidClient(i))
 		{
 			selectedAsSurvivor[i] = false;
 			damageDealt[i] = 0;
@@ -323,7 +325,7 @@ public Action Listener_JoinTeam(int client, const char[] command, int args)
 		return Plugin_Handled;
 	}
 
-	if (firstConnection[client] )
+	if (firstConnection[client])
 	{
 		firstConnection[client] = false;
 		return Plugin_Continue;
@@ -335,8 +337,8 @@ public Action Listener_JoinTeam(int client, const char[] command, int args)
 public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom)
 {
 	if (!waitingForPlayers)
-		{
-		if (victim < 1 || attacker < 1 || !IsClientInGame(attacker) || !IsClientInGame(victim) || victim == attacker)
+	{
+		if (victim < 1 || attacker < 1 || !IsValidClient(attacker) || !IsValidClient(victim) || victim == attacker)
 			return Plugin_Continue;
 
 		damageDealt[attacker] += view_as<int>(damage);
@@ -377,7 +379,8 @@ public Action Event_PlayerRegen(Event event, const char[] name, bool dontBroadca
 
 public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 {
-	if (!waitingForPlayers) {
+	if (!waitingForPlayers) 
+	{
 		int victim = GetClientOfUserId(event.GetInt("userid"));
 		int assister = GetClientOfUserId(event.GetInt("assister"));
 		int attacker = GetClientOfUserId(event.GetInt("attacker"));
@@ -391,7 +394,7 @@ public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 			RequestFrame(Zombie_Setup, victim);
 		}
 
-		if (attacker < 1 || !IsClientInGame(attacker) || victim == attacker)
+		if (attacker < 1 || !IsValidClient(attacker) || victim == attacker)
 		{
 			return Plugin_Continue;
 		}
@@ -404,13 +407,32 @@ public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 
 			queuePoints[attacker] += gcv_killpoints.IntValue;
 
-			if (assister && IsClientInGame(assister))
+			if (assister && IsValidClient(assister))
 			{
 				queuePoints[assister] += gcv_assistpoints.IntValue;
 			}
 		}
 	}
 	return Plugin_Continue;
+}
+
+public Action Event_BuiltObject(Event event, const char[] name, bool dontBroadcast)
+{	
+	int player = GetClientOfUserId(event.GetInt("userid"));
+	if (!player) 
+		return Plugin_Continue;
+	
+	int index = event.GetInt("index");
+	char classname[32];
+	GetEdictClassname(index, classname, sizeof(classname));
+	
+	if (strcmp("obj_dispenser", classname) != 0)
+	{
+		return Plugin_Continue;
+	}
+	
+	SetEntPropFloat(index, Prop_Send, "m_flModelScale", 2.0);
+	return Plugin_Handled;
 }
 
 /* Survivor setup
@@ -445,24 +467,41 @@ void Zombie_Setup(const int client)
 
 void OnlyMelee(int client)
 {
-	for (int i = 0; i < 6; i++)
+	if (GetClientTeam(client) == TEAM_SURVIVORS)
 	{
-		if (i == 2)
-			continue;
-		if (i == 3)
+		for (int i = 0; i < 6; i++)
 		{
-			if (TF2_GetPlayerClass(client) == TFClass_Engineer || TF2_GetPlayerClass(client) == TFClass_Spy)
+			if (i == 2)
+			{
 				continue;
-		}
-		if (i == 4)
-		{
-			if (TF2_GetPlayerClass(client) == TFClass_Engineer || TF2_GetPlayerClass(client) == TFClass_Spy)
+			}
+			else if (i == 3)
+			{
+				if (TF2_GetPlayerClass(client) == TFClass_Engineer || TF2_GetPlayerClass(client) == TFClass_Spy)
+					continue;
+			}
+			else if (i == 4)
+			{
+				if (TF2_GetPlayerClass(client) == TFClass_Engineer || TF2_GetPlayerClass(client) == TFClass_Spy)
+					continue;
+			}
+			else if (i == 5 && TF2_GetPlayerClass(client) == TFClass_Engineer)
+			{
 				continue;
-		}
-		if (i == 5 && TF2_GetPlayerClass(client) == TFClass_Engineer)
-			continue;
+			}
 
-		TF2_RemoveWeaponSlot(client, i);
+			TF2_RemoveWeaponSlot(client, i);
+		}
+	}
+	else 
+	{
+		for (int i = 0; i < 6; i++)
+		{
+			if (i == 2)
+				continue;
+
+			TF2_RemoveWeaponSlot(client, i);
+		}
 	}
 
 	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 2)); 
@@ -564,7 +603,7 @@ public Action Timer_CalcQueuePoints(Handle timer)
 {
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsClientInGame(i) && damageDealt[i] >= gcv_mindamage.IntValue)
+		if (IsValidClient(i) && damageDealt[i] >= gcv_mindamage.IntValue)
 		{
 			queuePoints[i] += 10;
 		}
@@ -584,7 +623,7 @@ public Action Timer_PlaytimePoints(Handle timer)
 	{
 		for (int i = 1; i <= MaxClients; i++)
 		{
-			if (IsClientInGame(i) && GetClientTeam(i) == TEAM_ZOMBIES)
+			if (IsValidClient(i) && GetClientTeam(i) == TEAM_ZOMBIES)
 			{
 				queuePoints[i] += gcv_playtimepoints.IntValue;
 			}
@@ -596,13 +635,13 @@ public Action Timer_PlaytimePoints(Handle timer)
 /* Queue points checking
 ==================================================================================================== */
 
-int GetClientWithMostQueuePoints(bool[] arrayType, bool mark=true)
+int GetClientWithMostQueuePoints(bool[] myArray, bool mark=true)
 {
 	int chosen = 0;
 
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsClientInGame(i) && queuePoints[i] >= queuePoints[chosen] && !arrayType[i])
+		if (IsValidClient(i) && queuePoints[i] >= queuePoints[chosen] && !myArray[i])
 		{
 			chosen = i;
 		}
@@ -610,7 +649,7 @@ int GetClientWithMostQueuePoints(bool[] arrayType, bool mark=true)
 
 	if (chosen && mark)
 	{
-		arrayType[chosen] = true;
+		myArray[chosen] = true;
 	}
 
 	return chosen;
@@ -660,6 +699,14 @@ public void DeleteEntity(int ref)
 	if (IsValidEntity(entity)) {
 		RemoveEdict(entity);
 	}
+}
+
+/* Custom Functions
+==================================================================================================== */
+
+bool IsValidClient(const int client)
+{
+	return 1 <= client <= MaxClients && IsClientInGame(client);
 }
 
 /* Debug output
