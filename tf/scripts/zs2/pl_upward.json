@@ -2,21 +2,40 @@
 	"t_setup": 30,
 	"t_round": 360,
 	"t_cp": false,
-	"oneleft": "zs2/oneleft.wav",
+	"freeze": false,
 	"heartbeat": false,
-	"cp_a": true,
-	"cp_d": true,
+	"tank": "zs2/tank/tank1_22050.wav",
+	
+	"game_a": true,
+	"game_d": true,
 	"cp_intro": "zs2/intro_cp/bloodharvest_m.wav",
 	"cp_last": "zs2/last/attacklast_m.wav",
-	"st_s": true,
-	"st_w": true,
-	"st_w_num": 120,
-	"st_sc": true,
-	"st_sc_num": 10,
+	
+	"game_s": true,
+	"game_w": true,
+	"w_perperson": 20,
+	"game_sc": true,
+	"sc_perperson": 2,
 	"st_intro": "zs2/intro_st/bloodharvest_m22050.wav",
 	"st_sting": "zs2/intro_st/sting1_m22050.wav",
 	"st_last": "zs2/last/scavengelast.wav",
-	"st_cans": {
+	
+	"ent_autodoor": true,
+	"ent_autovis": true,
+	"ent_delnow": [
+		"respawnroom_red"
+	],
+	"ent_del": [
+		"respawnroom_mid"
+	],
+	"ent_opennow": [
+		"door_red_exitC2"
+	],
+	"ent_open": [
+		"door_mid_exit1"
+	],
+	
+	"cans": {
 		"1": [ 0, 0, 0 ],
 		"2": [ 123.45, -123.45, 0 ]
 	}
