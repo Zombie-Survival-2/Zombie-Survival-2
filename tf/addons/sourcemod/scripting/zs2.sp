@@ -250,9 +250,9 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 }
 
 public Action Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) {
-	// Set all resupply cabinets to only work for zombies, this currently doesn't work because of bad ent_fire code
-	char teamNum[1];
-	IntToString(TEAM_ZOMBIES, teamNum, 1);
+	// Set all resupply cabinets to only work for zombies
+	char teamNum[2];
+	IntToString(TEAM_ZOMBIES, teamNum, sizeof(teamNum));
 	EntFire("func_regenerate", "SetTeam", teamNum);
 }
 
@@ -341,7 +341,7 @@ public Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 
 	if (GetClientTeam(player) == TEAM_ZOMBIES)
 	{
-		RequestFrame(Zombie_Setup, victim);
+		RequestFrame(Zombie_Setup, player);
 	}
 
 	return Plugin_Continue;
@@ -355,7 +355,7 @@ public Action Event_PlayerRegen(Event event, const char[] name, bool dontBroadca
 
 	if (GetClientTeam(player) == TEAM_ZOMBIES)
 	{
-		RequestFrame(Zombie_Setup, victim);
+		RequestFrame(Zombie_Setup, player);
 	}
 
 	return Plugin_Continue;
@@ -623,9 +623,8 @@ JSON_Object ReadScript(char[] name)
 /* Entity firing
 ==================================================================================================== */
 
-// This does not currently work, it is meant to be sm_entfire with updated syntax
 stock bool EntFire(char[] strTargetname, char[] strInput, char strParameter[] = "", float flDelay = 0.0) {
-	char strBuffer[255];
+	char strBuffer[256];
 	Format(strBuffer, sizeof(strBuffer), "OnUser1 %s:%s:%s:%f:1", strTargetname, strInput, strParameter, flDelay);
 	int entity = CreateEntityByName("info_target");
 	if (IsValidEdict(entity)) {
@@ -634,17 +633,15 @@ stock bool EntFire(char[] strTargetname, char[] strInput, char strParameter[] = 
 		SetVariantString(strBuffer);
 		AcceptEntityInput(entity, "AddOutput");
 		AcceptEntityInput(entity, "FireUser1");
-		CreateTimer(0.0, Timer_DeleteEdict, entity);
+		RequestFrame(DeleteEdict, entity);
 		return true;
 	}
 	return false;
 }
 
-public Action Timer_DeleteEdict(Handle timer, int entity) {
-	if (IsValidEdict(entity)) {
+public void DeleteEdict(int entity) {
+	if (IsValidEntity(entity))
 		RemoveEdict(entity);
-	}
-	return Plugin_Stop;
 }
 
 /* Debug output
