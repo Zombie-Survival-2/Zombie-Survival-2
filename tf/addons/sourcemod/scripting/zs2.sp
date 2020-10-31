@@ -168,12 +168,17 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 	if (serverdata != null)
 	{
 		// Set this as the setup time
-		int intval = serverdata.GetInt("t_setup");
+		// int intval = serverdata.GetInt("t_setup");
 		// Set this as the round time
-		intval = serverdata.GetInt("t_round");
+		// intval = serverdata.GetInt("t_round");
 		char strval[32];
 		// Play this sound to everyone if this is the first round or the player count has grown
 		serverdata.GetString("st_intro", strval, sizeof(strval));
+		for (int i = 1; i <= MaxClients; i++)
+		{
+			if (IsClientInGame(i))
+				EmitSoundToClient(i, strval, i);
+		}
 		// Else play this sound to everyone if the player count has not grown
 		serverdata.GetString("st_sting", strval, sizeof(strval));
 	}
@@ -591,9 +596,9 @@ JSON_Object ReadScript(char[] name)
 	Format(file, sizeof(file), "scripts/zs2/%s.json", name);
 	if (FileExists(file))
 	{
-		char decoded[1024];
+		char output[1024];
 		File json = OpenFile(file, "r");
-		json.ReadString(decoded, sizeof(decoded));
+		json.ReadString(output, sizeof(output));
 		CloseHandle(json);
 		return json_decode(output);
 	}
