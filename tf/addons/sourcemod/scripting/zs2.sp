@@ -315,7 +315,15 @@ public Action Event_Audio(Event event, const char[] name, bool dontBroadcast)
 
 public Action Listener_JoinTeam(int client, const char[] command, int args)
 {
-	if (firstConnection[client])
+	char arg[8];
+	GetCmdArg(1, arg, sizeof(arg));
+
+	if (StrContains(arg, "spec", false) > -1)
+	{
+		return Plugin_Handled;
+	}
+
+	if (firstConnection[client] )
 	{
 		firstConnection[client] = false;
 		return Plugin_Continue;
