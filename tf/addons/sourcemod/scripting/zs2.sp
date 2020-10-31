@@ -30,7 +30,6 @@ public Plugin myinfo = {
 
 // Global Variables
 enum {
-	INVALID = 0,
 	TEAM_SPECTATORS = 1,
 	TEAM_SURVIVORS = 2,
 	TEAM_ZOMBIES = 3
@@ -321,6 +320,16 @@ void OnlyMelee(int client)
 	{
 		if (i == 2)
 			continue;
+		if (i == 3)
+		{
+			if (TF2_GetPlayerClass(client) == TFClass_Engineer || TF2_GetPlayerClass(client) == TFClass_Spy)
+				continue;
+		}
+		if (i == 4)
+		{
+			if (TF2_GetPlayerClass(client) == TFClass_Engineer || TF2_GetPlayerClass(client) == TFClass_Spy)
+				continue;
+		}
 
 		TF2_RemoveWeaponSlot(client, i);
 	}
