@@ -4,12 +4,13 @@
 #pragma semicolon 1
 
 #include <sourcemod>
-#include <sdktools>
 #include <sdkhooks>
-#include <morecolors>
+#include <sdktools>
 #include <tf2>
 #include <tf2_stocks>
 #include <advanced_motd>
+#include <json>
+#include <morecolors>
 
 #pragma newdecls required
 
@@ -44,7 +45,8 @@ int queuePoints[MAXPLAYERS+1],
 
 // ConVars
 ConVar gcv_debug,
-	gcv_Ratio, 
+	gcv_Ratio,
+	gcv_maxsurvivors,
 	gcv_MinDamage, 
 	gcv_timerPoints,
 	gcv_playtimePoints,
@@ -135,7 +137,7 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 		maxsurvivors = 6;
 	int required;
 	if (playerCount <= ratio * (maxsurvivors - ratio))
-		required = RoundToCeil(playerCount / ratio);
+		required = RoundToCeil(float(playerCount) / float(ratio));
 	else
 		required = maxsurvivors;
 
@@ -155,6 +157,21 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 		{
 			Zombie_Setup(i);
 			CPrintToChat(i, "%s {haunted}You have been selected to become a {normal}Zombie.", MESSAGE_PREFIX);
+		}
+	}
+	
+	if (gcv_debug.BoolValue)
+	{
+		if (FileExists("scripts/zombiesurvival2/pl_upward.json"))
+		{
+			char output[1024];
+			File json = OpenFile("scripts/zombiesurvival2/pl_upward.json", "r");
+			json.ReadString(output, sizeof(output));
+			CloseHandle(json);
+			JSON_Object obj = json_decode(output);
+			char strval[32];
+			obj.GetString("oneleft", strval, sizeof(strval));
+			DebugText(strval);
 		}
 	}
 
@@ -384,7 +401,7 @@ public Action Command_Reset(int client, int args)
 	{
 		if (gcv_debug.BoolValue)
 		{
-			for (i = 0; i < MaxClients; i++)
+			for (int i = 0; i < MaxClients; i++)
 				queuePoints[i] = 0;
 			DebugText("All queue points reset to 0.");
 		}
@@ -393,7 +410,7 @@ public Action Command_Reset(int client, int args)
 		return Plugin_Handled;
 	}
 	queuePoints[client] = 0;
-	CPrintToChat(i, "%s {haunted}Your queue points were reset to 0.", MESSAGE_PREFIX);
+	CPrintToChat(client, "%s {haunted}Your queue points were reset to 0.", MESSAGE_PREFIX);
 	return Plugin_Handled;
 }
 
