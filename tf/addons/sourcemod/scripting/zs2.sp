@@ -98,10 +98,12 @@ public void OnPluginStart()
 
 public void OnMapStart() {
 	// Sounds precaching and downloading
-	PrecacheSound("zombiesurvival2/defeat.wav");
-	PrecacheSound("zombiesurvival2/victory.wav");
-	AddFileToDownloadsTable("sound/zombiesurvival2/defeat.wav");
-	AddFileToDownloadsTable("sound/zombiesurvival2/victory.wav");
+	PrecacheSound("zs2/death.mp3");
+	AddFileToDownloadsTable("sound/zs2/death.mp3");
+	PrecacheSound("zs2/defeat.mp3");
+	AddFileToDownloadsTable("sound/zs2/defeat.mp3");
+	PrecacheSound("zs2/victory.mp3");
+	AddFileToDownloadsTable("sound/zs2/victory.mp3");
 }
 
 public void OnConfigsExecuted()
@@ -162,10 +164,10 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 	
 	if (gcv_debug.BoolValue)
 	{
-		if (FileExists("scripts/zombiesurvival2/pl_upward.json"))
+		if (FileExists("scripts/zs2/pl_upward.json"))
 		{
 			char output[1024];
-			File json = OpenFile("scripts/zombiesurvival2/pl_upward.json", "r");
+			File json = OpenFile("scripts/zs2/pl_upward.json", "r");
 			json.ReadString(output, sizeof(output));
 			CloseHandle(json);
 			JSON_Object obj = json_decode(output);
@@ -192,11 +194,11 @@ public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 
 			if (team == GetClientTeam(i))
 			{
-				EmitSoundToClient(i, "zombiesurvival2/victory.wav", i);
+				EmitSoundToClient(i, "zs2/victory.mp3", i);
 			}
 			else
 			{
-				EmitSoundToClient(i, "zombiesurvival2/defeat.wav", i);
+				EmitSoundToClient(i, "zs2/defeat.mp3", i);
 			}
 		}
 	}
@@ -254,6 +256,8 @@ public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 
 	if (team == TEAM_SURVIVORS)
 	{
+		EmitSoundToClient(victim, "zs2/death.mp3", victim);
+
 		queuePoints[attacker] += gcv_killPoints.IntValue;
 
 		if (assister && IsClientInGame(assister))
