@@ -330,6 +330,8 @@ void OnlyMelee(int client)
 			if (TF2_GetPlayerClass(client) == TFClass_Engineer || TF2_GetPlayerClass(client) == TFClass_Spy)
 				continue;
 		}
+		if (i == 5 && TF2_GetPlayerClass(client) == TFClass_Engineer)
+			continue;
 
 		TF2_RemoveWeaponSlot(client, i);
 	}
