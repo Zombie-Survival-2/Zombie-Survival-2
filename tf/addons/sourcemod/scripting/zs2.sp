@@ -36,8 +36,6 @@ enum
 {
 	INVALID = 0,
 	TEAM_SPEC = 1,
-	TEAM_SURVIVORS = 2,
-	TEAM_ZOMBIES = 3
 };
 
 // Variables
@@ -45,7 +43,9 @@ bool roundStarted,
 	waitingForPlayers,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
-int queuePoints[MAXPLAYERS+1], 
+int TEAM_SURVIVORS = 2,
+	TEAM_ZOMBIES = 3,
+	queuePoints[MAXPLAYERS+1], 
 	damageDealt[MAXPLAYERS+1];	
 
 // ConVars
@@ -353,10 +353,10 @@ public Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 	if (!player) 
 		return Plugin_Continue;
 
-	if (GetClientTeam(player) == TEAM_ZOMBIES)
-	{
-		RequestFrame(Zombie_Setup, player);
-	}
+	/*if (GetClientTeam(player) == TEAM_ZOMBIES)
+	{		
+		RequestFrame(Zombie_Setup, GetClientUserId(player));
+	}*/	
 
 	return Plugin_Continue;
 }
