@@ -106,7 +106,7 @@ public void OnMapStart() {
 	AddFileToDownloadsTable("sound/zs2/victory.mp3");
 	// Wav files need to be changed to mp3 wherever possible, will require re-render on Jack's end
 	PrecacheSound("zs2/intro_st/bloodharvest_m22050.wav");
-	AddFileToDownloadsTable("zs2/intro_st/bloodharvest_m22050.wav");
+	AddFileToDownloadsTable("sound/zs2/intro_st/bloodharvest_m22050.wav");
 }
 
 public void OnConfigsExecuted()
@@ -174,8 +174,8 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 		// int intval = serverdata.GetInt("t_setup");
 		// Set this as the round time
 		// intval = serverdata.GetInt("t_round");
-		char strval[32];
-		// Play this sound to everyone if this is the first round or the player count has grown
+		char strval[64];
+		// Play this sound to everyone if this is the first round or the player count has grown, need to distinguish between waiting for players eventually
 		serverdata.GetString("st_intro", strval, sizeof(strval));
 		for (int i = 1; i <= MaxClients; i++)
 		{
