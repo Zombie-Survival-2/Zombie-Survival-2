@@ -162,19 +162,24 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 		}
 	}
 	
-	if (gcv_debug.BoolValue)
+	char map[64];
+	GetCurrentMap(map, sizeof(map));
+	JSON_Object serverdata = ReadScript(map);
+	if (serverdata != null)
 	{
-		if (FileExists("scripts/zs2/pl_upward.json"))
-		{
-			char output[1024];
-			File json = OpenFile("scripts/zs2/pl_upward.json", "r");
-			json.ReadString(output, sizeof(output));
-			CloseHandle(json);
-			JSON_Object obj = json_decode(output);
-			char strval[32];
-			obj.GetString("oneleft", strval, sizeof(strval));
-			DebugText(strval);
-		}
+		// Set this as the setup time
+		int intval = serverdata.GetInt("t_setup");
+		// Set this as the round time
+		intval = serverdata.GetInt("t_round");
+		char strval[32];
+		// Play this sound to everyone if this is the first round or the player count has grown
+		serverdata.GetString("st_intro", strval, sizeof(strval));
+		// Else play this sound to everyone if the player count has not grown
+		serverdata.GetString("st_sting", strval, sizeof(strval));
+	}
+	else
+	{
+		// Do default stuff here
 	}
 
 	roundStarted = true;
@@ -575,4 +580,22 @@ public Action Timer_DeleteEdict(Handle timer, int entity) {
 		RemoveEdict(entity);
 	}
 	return Plugin_Stop;
+}
+
+/* ReadScript()
+==================================================================================================== */
+
+JSON_Object ReadScript(char[] name)
+{
+	char file[64];
+	Format(file, sizeof(file), "scripts/zs2/%s.json", name);
+	if (FileExists(file))
+	{
+		char decoded[1024];
+		File json = OpenFile(file, "r");
+		json.ReadString(decoded, sizeof(decoded));
+		CloseHandle(json);
+		return json_decode(output);
+	}
+	return null;
 }
