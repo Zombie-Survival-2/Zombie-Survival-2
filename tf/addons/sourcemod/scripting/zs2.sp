@@ -104,6 +104,9 @@ public void OnMapStart() {
 	AddFileToDownloadsTable("sound/zs2/defeat.mp3");
 	PrecacheSound("zs2/victory.mp3");
 	AddFileToDownloadsTable("sound/zs2/victory.mp3");
+	// Wav files need to be changed to mp3 wherever possible, will require re-render on Jack's end
+	PrecacheSound("zs2/intro_st/bloodharvest_m22050.wav");
+	AddFileToDownloadsTable("zs2/intro_st/bloodharvest_m22050.wav");
 }
 
 public void OnConfigsExecuted()
