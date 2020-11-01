@@ -41,6 +41,7 @@ void ST_DisableLockers()
 	int ent = -1;
 	while ((ent = FindEntityByClassname(ent, "func_regenerate")) != -1)
 	{
-		AcceptEntityInput(ent, "Disable");
+		SetVariantInt(3);
+		AcceptEntityInput(ent, "SetTeam");
 	}
 }
