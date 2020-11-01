@@ -37,10 +37,10 @@ bool roundStarted,
 	waitingForPlayers,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
-int queuePoints[MAXPLAYERS+1], 
-	damageDealt[MAXPLAYERS+1],
-	TEAM_SURVIVORS = 2,
-	TEAM_ZOMBIES = 3;
+int TEAM_SURVIVORS = 2,
+	TEAM_ZOMBIES = 3,
+	queuePoints[MAXPLAYERS+1], 
+	damageDealt[MAXPLAYERS+1];	
 
 // ConVars
 ConVar gcv_debug,
@@ -118,7 +118,7 @@ public void OnConfigsExecuted()
 	InsertServerTag("zs2");
 
 	// Timers
-	CreateTimer(gcv_timerpoints.FloatValue, Timer_GiveQueuePoints, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+	CreateTimer(gcv_timerpoints.FloatValue, Timer_PlaytimePoints, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
 
 void InsertServerTag(const char[] insertThisTag) 
@@ -164,7 +164,7 @@ public void OnClientDisconnect(int client)
 
 public Action Timer_DisplayIntro(Handle timer, int client) 
 {
-	if (IsClientInGame(client)) // Required because player might disconnect before this fires
+	if (IsValidClient(client)) // Required because player might disconnect before this fires
 	{ 
 		CPrintToChat(client, "%s {haunted}This server is running {collectors}Zombie Survival 2 {normal}v%s!", MESSAGE_PREFIX, PLUGIN_VERSION);
 		CPrintToChat(client, "{haunted}If you would like to know more, type the command {normal}!zs2 {haunted}into chat.");
@@ -196,6 +196,7 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 		if (maxsurvivors > 32 || maxsurvivors < 1)
 			maxsurvivors = 6;
 		int required;
+		
 		if (playerCount <= ratio * (maxsurvivors - ratio))
 			required = RoundToCeil(float(playerCount) / float(ratio));
 		else
@@ -213,7 +214,7 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 
 		for (int i = 1; i <= MaxClients; i++)
 		{
-			if (IsClientInGame(i) && !selectedAsSurvivor[i])
+			if (IsValidClient(i) && !selectedAsSurvivor[i])
 			{
 				Zombie_Setup(i);
 				CPrintToChat(i, "%s {haunted}You have been selected to become a {normal}Zombie.", MESSAGE_PREFIX);
@@ -234,7 +235,7 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 			serverdata.GetString("st_intro", strval, sizeof(strval));
 			for (int i = 1; i <= MaxClients; i++)
 			{
-				if (IsClientInGame(i))
+				if (IsValidClient(i))
 					EmitSoundToClient(i, strval, i);
 			}
 			// Else play this sound to everyone if the player count has not grown
@@ -266,7 +267,7 @@ public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 	int team = event.GetInt("team");
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsClientInGame(i))
+		if (IsValidClient(i))
 		{
 			selectedAsSurvivor[i] = false;
 			damageDealt[i] = 0;
@@ -309,6 +310,14 @@ public Action Event_Audio(Event event, const char[] name, bool dontBroadcast)
 
 public Action Listener_JoinTeam(int client, const char[] command, int args)
 {
+	char arg[8];
+	GetCmdArg(1, arg, sizeof(arg));
+
+	if (StrContains(arg, "spec", false) > -1)
+	{
+		return Plugin_Handled;
+	}
+
 	if (firstConnection[client])
 	{
 		firstConnection[client] = false;
@@ -321,8 +330,8 @@ public Action Listener_JoinTeam(int client, const char[] command, int args)
 public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom)
 {
 	if (!waitingForPlayers)
-		{
-		if (victim < 1 || attacker < 1 || !IsClientInGame(attacker) || !IsClientInGame(victim) || victim == attacker)
+	{
+		if (victim < 1 || attacker < 1 || !IsValidClient(attacker) || !IsValidClient(victim) || victim == attacker)
 			return Plugin_Continue;
 
 		damageDealt[attacker] += view_as<int>(damage);
@@ -340,8 +349,9 @@ public Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 		return Plugin_Continue;
 
 	if (GetClientTeam(player) == TEAM_ZOMBIES)
-	{
-		RequestFrame(Zombie_Setup, player);
+	{		
+		RequestFrame(OnlyMelee, player);
+		RequestFrame(RemoveWearable, player);
 	}
 
 	return Plugin_Continue;
@@ -355,7 +365,8 @@ public Action Event_PlayerRegen(Event event, const char[] name, bool dontBroadca
 
 	if (GetClientTeam(player) == TEAM_ZOMBIES)
 	{
-		RequestFrame(Zombie_Setup, player);
+		OnlyMelee(player);
+		RemoveWearable(player);
 	}
 
 	return Plugin_Continue;
@@ -363,7 +374,8 @@ public Action Event_PlayerRegen(Event event, const char[] name, bool dontBroadca
 
 public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 {
-	if (!waitingForPlayers) {
+	if (!waitingForPlayers) 
+	{
 		int victim = GetClientOfUserId(event.GetInt("userid"));
 		int assister = GetClientOfUserId(event.GetInt("assister"));
 		int attacker = GetClientOfUserId(event.GetInt("attacker"));
@@ -372,12 +384,12 @@ public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 
 		int team = GetClientTeam(victim);
 
-		if (roundStarted && GetClientTeam(victim) == TEAM_SURVIVORS)
+		if (roundStarted && team == TEAM_SURVIVORS)
 		{
 			RequestFrame(Zombie_Setup, victim);
 		}
 
-		if (attacker < 1 || !IsClientInGame(attacker) || victim == attacker)
+		if (attacker < 1 || !IsValidClient(attacker) || victim == attacker)
 		{
 			return Plugin_Continue;
 		}
@@ -390,7 +402,7 @@ public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 
 			queuePoints[attacker] += gcv_killpoints.IntValue;
 
-			if (assister && IsClientInGame(assister))
+			if (assister && IsValidClient(assister))
 			{
 				queuePoints[assister] += gcv_assistpoints.IntValue;
 			}
@@ -550,7 +562,7 @@ public Action Timer_CalcQueuePoints(Handle timer)
 {
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsClientInGame(i) && damageDealt[i] >= gcv_mindamage.IntValue)
+		if (IsValidClient(i) && damageDealt[i] >= gcv_mindamage.IntValue)
 		{
 			queuePoints[i] += 10;
 		}
@@ -564,13 +576,13 @@ public Action Timer_Switch(Handle timer)
 	return Plugin_Continue;
 }
 
-public Action Timer_GiveQueuePoints(Handle timer)
+public Action Timer_PlaytimePoints(Handle timer)
 {
 	if (!roundStarted)
 	{
 		for (int i = 1; i <= MaxClients; i++)
 		{
-			if (IsClientInGame(i) && GetClientTeam(i) == TEAM_ZOMBIES)
+			if (IsValidClient(i) && GetClientTeam(i) == TEAM_ZOMBIES)
 			{
 				queuePoints[i] += gcv_playtimepoints.IntValue;
 			}
@@ -582,13 +594,13 @@ public Action Timer_GiveQueuePoints(Handle timer)
 /* Queue points checking
 ==================================================================================================== */
 
-int GetClientWithMostQueuePoints(bool[] arrayType, bool mark=true)
+int GetClientWithMostQueuePoints(bool[] myArray, bool mark=true)
 {
 	int chosen = 0;
 
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsClientInGame(i) && queuePoints[i] >= queuePoints[chosen] && !arrayType[i])
+		if (IsValidClient(i) && queuePoints[i] >= queuePoints[chosen] && !myArray[i])
 		{
 			chosen = i;
 		}
@@ -596,7 +608,7 @@ int GetClientWithMostQueuePoints(bool[] arrayType, bool mark=true)
 
 	if (chosen && mark)
 	{
-		arrayType[chosen] = true;
+		myArray[chosen] = true;
 	}
 
 	return chosen;
@@ -633,15 +645,27 @@ stock bool EntFire(char[] strTargetname, char[] strInput, char strParameter[] = 
 		SetVariantString(strBuffer);
 		AcceptEntityInput(entity, "AddOutput");
 		AcceptEntityInput(entity, "FireUser1");
-		RequestFrame(DeleteEdict, entity);
+		RequestFrame(DeleteEntity, EntIndexToEntRef(entity));
 		return true;
 	}
 	return false;
 }
 
-public void DeleteEdict(int entity) {
-	if (IsValidEntity(entity))
+public void DeleteEntity(int ref)
+{
+	int entity = EntRefToEntIndex(ref);
+	
+	if (IsValidEntity(entity)) {
 		RemoveEdict(entity);
+	}
+}
+
+/* Custom Functions
+==================================================================================================== */
+
+bool IsValidClient(const int client)
+{
+	return 1 <= client <= MaxClients && IsClientInGame(client);
 }
 
 /* Debug output
