@@ -36,7 +36,8 @@ public Plugin myinfo = {
 };
 
 // Variables
-bool roundStarted,
+bool setupTime,
+	roundStarted,
 	waitingForPlayers,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
@@ -107,6 +108,8 @@ public void OnMapStart() {
 	AddFileToDownloadsTable("sound/zs2/death.mp3");
 	PrecacheSound("zs2/defeat.mp3");
 	AddFileToDownloadsTable("sound/zs2/defeat.mp3");
+	PrecacheSound("zs2/oneleft.mp3");
+	AddFileToDownloadsTable("sound/zs2/oneleft.mp3");
 	PrecacheSound("zs2/victory.mp3");
 	AddFileToDownloadsTable("sound/zs2/victory.mp3");
 	// Wav files need to be changed to mp3 wherever possible, will require re-render on Jack's end
@@ -233,15 +236,41 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 		// Dynamically call methods based on current mode
 		Survival_RoundStart();
 
+		setupTime = true;
 		roundStarted = true;
 	}
 }
 
 void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) {
+	setupTime = false;
 	// Set all resupply cabinets to only work for zombies
 	char teamNum[2];
 	IntToString(TEAM_ZOMBIES, teamNum, sizeof(teamNum));
 	EntFire("func_regenerate", "SetTeam", teamNum);
+	
+	// A better approach is needed later where we force zombies onto the team to fill in the gap
+	bool survivorsExist = false;
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsValidClient(i))
+		{
+			int iteam = GetClientTeam(i);
+			if (iteam == TEAM_SURVIVORS)
+				survivorsExist = true;
+		}
+	}
+	if (!survivorsExist)
+	{
+		DebugText("No survivors, forcing a zombie team victory");
+		int entity = CreateEntityByName("game_round_win");
+		if (IsValidEdict(entity)) {
+			DispatchSpawn(entity);
+			ActivateEntity(entity);
+			SetVariantInt(TEAM_ZOMBIES);
+			AcceptEntityInput(entity, "SetTeam");
+			AcceptEntityInput(entity, "RoundWin");
+		}
+	}
 }
 
 /* Round end + audio blocking
@@ -275,6 +304,7 @@ void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 	if (GetTeamClientCount(TEAM_SURVIVORS) == 1 && team == TEAM_ZOMBIES) // Important! Call switch after `roundStarted` is set to false.
 	{
 		CreateTimer(12.0, Timer_Switch, _, TIMER_FLAG_NO_MAPCHANGE);
+		// This may be causing the zombie with the most queue points to be forcibly moved to the red team for no reason, fix if possible
 	}
 }
 
@@ -361,7 +391,7 @@ Action Event_PlayerRegen(Event event, const char[] name, bool dontBroadcast)
 
 Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 {
-	if (!waitingForPlayers) 
+	if (!waitingForPlayers && !setupTime)
 	{
 		int victim = GetClientOfUserId(event.GetInt("userid"));
 		int assister = GetClientOfUserId(event.GetInt("assister"));
@@ -373,6 +403,43 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 
 		if (roundStarted && team == TEAM_SURVIVORS)
 		{
+			EmitSoundToClient(victim, "zs2/death.mp3", victim);
+			
+			int survivorsLiving = 0;
+			for (int i = 1; i <= MaxClients; i++)
+			{
+				if (IsValidClient(i) && i != victim)
+				{
+					int iteam = GetClientTeam(i);
+					if (iteam == TEAM_SURVIVORS)
+					{
+						survivorsLiving++;
+					}
+				}
+			}
+			DebugText("%i survivors are alive", survivorsLiving);
+			if (survivorsLiving == 1)
+			{
+				DebugText("Playing one left music");
+				for (int i = 1; i <= MaxClients; i++)
+				{
+					if (IsValidClient(i))
+						EmitSoundToClient(i, "zs2/oneleft.mp3", i);
+				}
+			}
+			else if (survivorsLiving == 0)
+			{
+				DebugText("Forcing a zombie team victory");
+				int entity = CreateEntityByName("game_round_win");
+				if (IsValidEdict(entity)) {
+					DispatchSpawn(entity);
+					ActivateEntity(entity);
+					SetVariantInt(TEAM_ZOMBIES);
+					AcceptEntityInput(entity, "SetTeam");
+					AcceptEntityInput(entity, "RoundWin");
+				}
+			}
+			
 			RequestFrame(Zombie_Setup, victim);
 		}
 
@@ -385,8 +452,6 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 
 		if (team == TEAM_SURVIVORS)
 		{
-			EmitSoundToClient(victim, "zs2/death.mp3", victim);
-
 			queuePoints[attacker] += gcv_killpoints.IntValue;
 
 			if (assister && IsValidClient(assister))
