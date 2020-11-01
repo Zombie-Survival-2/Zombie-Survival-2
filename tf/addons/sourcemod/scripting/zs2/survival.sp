@@ -1,5 +1,11 @@
 public void Survival_RoundStart()
 {
+	ST_IntroMusic();
+	ST_DisableObjectives();
+}
+
+void ST_IntroMusic()
+{
 	char map[64];
 	GetCurrentMap(map, sizeof(map));
 	JSON_Object serverdata = ReadScript(map);
@@ -15,11 +21,9 @@ public void Survival_RoundStart()
 				EmitSoundToClient(i, strval, i);
 		}
 	}
-
-	BlockCapture();
 }
 
-void BlockCapture()
+void ST_DisableObjectives()
 {
 	char captures[5][32] = { "team_control_point_master", "team_control_point", "trigger_capture_area", "item_teamflag", "func_capturezone" };
 	int ent = -1;
