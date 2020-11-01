@@ -1,23 +1,20 @@
 {
 	"t_setup": 30,
-	"t_round": 360,
-	"t_cp": false,
+	"t_round": 390,
 	"freeze": false,
 	"heartbeat": false,
-	"tank": "-tank",
+	"tank": "zs2/tank/tank1_22050.wav",
 	
-	"game_a": true,
-	"game_d": true,
-	"cp_intro": "-bloodharvest",
-	"cp_last": "-attacklast",
+	"cp_a": true,
+	"cp_d": true,
+	"cp_intro": "zs2/intro_cp/bloodharvest.mp3",
+	"cp_last": "zs2/last/attacklast_m.wav",
 	
-	"game_s": true,
-	"game_w": true,
-	"w_perperson": 20,
-	"game_sc": true,
-	"sc_perperson": 2,
-	"st_intro": "-bloodharvest",
-	"st_last": "-scavengelast",
+	"st_s": true,
+	"st_w": true,
+	"st_sc": true,
+	"st_intro": "zs2/intro_st/bloodharvest.mp3",
+	"st_last": "zs2/last/scavengelast.wav",
 	
 	"ent_autodoor": true,
 	"ent_autovis": true,
@@ -34,7 +31,7 @@
 		"door_mid_exit1"
 	],
 	
-	"cans": {
+	"st_cans": {
 		"1": [ 0, 0, 0 ],
 		"2": [ 123.45, -123.45, 0 ]
 	}
