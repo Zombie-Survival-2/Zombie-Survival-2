@@ -11,12 +11,17 @@ void ST_IntroMusic()
 	JSON_Object serverdata = ReadScript(map);
 	if (serverdata != null)
 	{
+		DebugText("Map script located");
 		char strval[64];
 		serverdata.GetString("st_intro", strval, sizeof(strval));
-		for (int i = 1; i <= MaxClients; i++)
+		if (strval != null)
 		{
-			if (IsValidClient(i))
-				EmitSoundToClient(i, strval, i);
+			DebugText("ST intro music located");
+			for (int i = 1; i <= MaxClients; i++)
+			{
+				if (IsValidClient(i))
+					EmitSoundToClient(i, strval, i);
+			}
 		}
 	}
 }
