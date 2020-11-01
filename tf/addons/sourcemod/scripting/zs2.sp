@@ -12,6 +12,8 @@
 #include <json>
 #include <morecolors>
 
+#include "zs2/survival.sp"
+
 #pragma newdecls required
 
 /* Global variables and plugin information
@@ -26,7 +28,7 @@
 // Plugin information
 public Plugin myinfo = {
 	name = "Zombie Survival 2",
-	author = "Hagvan, Jack5, poonit & SirGreenman",
+	author = "Jack5 & poonit",
 	description = "A zombie game mode featuring all-class action with multiple modes, inspired by the Left 4 Dead series.",
 	version = PLUGIN_VERSION,
 	url = "https://github.com/Zombie-Survival-2"
@@ -162,10 +164,10 @@ public void OnClientDisconnect(int client)
 	firstConnection[client] = true;
 }
 
-public Action Timer_DisplayIntro(Handle timer, int client) 
+Action Timer_DisplayIntro(Handle timer, int client) 
 {
 	if (IsValidClient(client)) // Required because player might disconnect before this fires
-	{ 
+	{
 		CPrintToChat(client, "%s {haunted}This server is running {collectors}Zombie Survival 2 {normal}v%s!", MESSAGE_PREFIX, PLUGIN_VERSION);
 		CPrintToChat(client, "{haunted}If you would like to know more, type the command {normal}!zs2 {haunted}into chat.");
 	}
@@ -184,7 +186,7 @@ public void TF2_OnWaitingForPlayersEnd()
 	waitingForPlayers = false;
 }
 
-public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
+void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
 	if (!waitingForPlayers)
 	{
@@ -206,8 +208,12 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 		{
 			int player = GetClientWithMostQueuePoints(selectedAsSurvivor);
 			if (!player)
+			{
+				DebugText("Player %i does not exist and cannot be placed on the survivor team", player);
 				break;
+			}
 
+			DebugText("Placing player %i on the survivor team", player);
 			Survivor_Setup(player);
 			CPrintToChat(player, "%s {haunted}You have been selected to become a {normal}Survivor.", MESSAGE_PREFIX);
 		}
@@ -221,36 +227,14 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 			}
 		}
 		
-		char map[64];
-		GetCurrentMap(map, sizeof(map));
-		JSON_Object serverdata = ReadScript(map);
-		if (serverdata != null)
-		{
-			// Set this as the setup time
-			// int intval = serverdata.GetInt("t_setup");
-			// Set this as the round time
-			// intval = serverdata.GetInt("t_round");
-			char strval[64];
-			// Play this sound to everyone if this is the first round or the player count has grown, need to distinguish between waiting for players eventually
-			serverdata.GetString("st_intro", strval, sizeof(strval));
-			for (int i = 1; i <= MaxClients; i++)
-			{
-				if (IsValidClient(i))
-					EmitSoundToClient(i, strval, i);
-			}
-			// Else play this sound to everyone if the player count has not grown
-			serverdata.GetString("st_sting", strval, sizeof(strval));
-		}
-		else
-		{
-			// Do default stuff here
-		}
+		// Dynamically call methods based on current mode
+		Survival_RoundStart();
 
 		roundStarted = true;
 	}
 }
 
-public Action Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) {
+void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) {
 	// Set all resupply cabinets to only work for zombies
 	char teamNum[2];
 	IntToString(TEAM_ZOMBIES, teamNum, sizeof(teamNum));
@@ -260,7 +244,7 @@ public Action Event_SetupFinished(Event event, const char[] name, bool dontBroad
 /* Round end + audio blocking
 ==================================================================================================== */
 
-public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
+void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
 	CreateTimer(3.0, Timer_CalcQueuePoints, _, TIMER_FLAG_NO_MAPCHANGE);
 
@@ -291,7 +275,7 @@ public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 	}
 }
 
-public Action Event_Audio(Event event, const char[] name, bool dontBroadcast)
+Action Event_Audio(Event event, const char[] name, bool dontBroadcast)
 {
     char strAudio[40];
     GetEventString(event, "sound", strAudio, sizeof(strAudio));
@@ -308,7 +292,7 @@ public Action Event_Audio(Event event, const char[] name, bool dontBroadcast)
 /* Client actions
 ==================================================================================================== */
 
-public Action Listener_JoinTeam(int client, const char[] command, int args)
+Action Listener_JoinTeam(int client, const char[] command, int args)
 {
 	char arg[8];
 	GetCmdArg(1, arg, sizeof(arg));
@@ -327,7 +311,7 @@ public Action Listener_JoinTeam(int client, const char[] command, int args)
 	return Plugin_Handled;
 }
 
-public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom)
+Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom)
 {
 	if (!waitingForPlayers)
 	{
@@ -342,7 +326,7 @@ public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &dam
 /* Client events
 ==================================================================================================== */
 
-public Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
+Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 {
 	int player = GetClientOfUserId(event.GetInt("userid"));
 	if (!player) 
@@ -357,7 +341,7 @@ public Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 	return Plugin_Continue;
 }
 
-public Action Event_PlayerRegen(Event event, const char[] name, bool dontBroadcast)
+Action Event_PlayerRegen(Event event, const char[] name, bool dontBroadcast)
 {
 	int player = GetClientOfUserId(event.GetInt("userid"));
 	if (!player) 
@@ -372,7 +356,7 @@ public Action Event_PlayerRegen(Event event, const char[] name, bool dontBroadca
 	return Plugin_Continue;
 }
 
-public Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
+Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 {
 	if (!waitingForPlayers) 
 	{
@@ -558,7 +542,7 @@ public int Handler_Nothing(Menu menu, MenuAction action, int client, int param2)
 /* Timers
 ==================================================================================================== */
 
-public Action Timer_CalcQueuePoints(Handle timer)
+Action Timer_CalcQueuePoints(Handle timer)
 {
 	for (int i = 1; i <= MaxClients; i++)
 	{
@@ -569,14 +553,14 @@ public Action Timer_CalcQueuePoints(Handle timer)
 	}
 }
 
-public Action Timer_Switch(Handle timer)
+Action Timer_Switch(Handle timer)
 {
 	int player = GetClientWithMostQueuePoints(selectedAsSurvivor, false);
 	if (player) ChangeClientTeam(player, TEAM_SURVIVORS);
 	return Plugin_Continue;
 }
 
-public Action Timer_PlaytimePoints(Handle timer)
+Action Timer_PlaytimePoints(Handle timer)
 {
 	if (!roundStarted)
 	{
@@ -635,7 +619,7 @@ JSON_Object ReadScript(char[] name)
 /* Entity firing
 ==================================================================================================== */
 
-stock bool EntFire(char[] strTargetname, char[] strInput, char strParameter[] = "", float flDelay = 0.0) {
+bool EntFire(char[] strTargetname, char[] strInput, char strParameter[] = "", float flDelay = 0.0) {
 	char strBuffer[256];
 	Format(strBuffer, sizeof(strBuffer), "OnUser1 %s:%s:%s:%f:1", strTargetname, strInput, strParameter, flDelay);
 	int entity = CreateEntityByName("info_target");
@@ -651,7 +635,7 @@ stock bool EntFire(char[] strTargetname, char[] strInput, char strParameter[] = 
 	return false;
 }
 
-public void DeleteEntity(int ref)
+void DeleteEntity(int ref)
 {
 	int entity = EntRefToEntIndex(ref);
 	
@@ -671,7 +655,7 @@ bool IsValidClient(const int client)
 /* Debug output
 ==================================================================================================== */
 
-public void DebugText(const char[] text, any ...) {
+void DebugText(const char[] text, any ...) {
 	if (gcv_debug.BoolValue) {
 		int len = strlen(text) + 255;
 		char[] format = new char[len];
