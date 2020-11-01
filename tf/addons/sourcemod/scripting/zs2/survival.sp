@@ -2,6 +2,7 @@ public void Survival_RoundStart()
 {
 	ST_IntroMusic();
 	ST_DisableObjectives();
+	ST_DisableLockers();
 }
 
 void ST_IntroMusic()
@@ -13,8 +14,6 @@ void ST_IntroMusic()
 	{
 		char strval[64];
 		serverdata.GetString("st_intro", strval, sizeof(strval));
-		// Play this sound instead if the player count has not grown
-		/* serverdata.GetString("st_sting", strval, sizeof(strval)); */
 		for (int i = 1; i <= MaxClients; i++)
 		{
 			if (IsValidClient(i))
@@ -34,5 +33,14 @@ void ST_DisableObjectives()
 		{
 			AcceptEntityInput(ent, "Disable");
 		}
+	}
+}
+
+void ST_DisableLockers()
+{
+	int ent = -1;
+	while ((ent = FindEntityByClassname(ent, "func_regenerate")) != -1)
+	{
+		AcceptEntityInput(ent, "Disable");
 	}
 }
