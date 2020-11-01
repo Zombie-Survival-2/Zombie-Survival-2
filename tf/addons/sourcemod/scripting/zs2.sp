@@ -247,10 +247,14 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 
 void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) {
 	setupTime = false;
-	// Set all resupply cabinets to only work for zombies
-	char teamNum[2];
-	IntToString(TEAM_ZOMBIES, teamNum, sizeof(teamNum));
-	EntFire("func_regenerate", "SetTeam", teamNum);
+	
+	// Disable resupply lockers for survivors
+	int ent = -1;
+	while ((ent = FindEntityByClassname(ent, "func_regenerate")) != -1)
+	{
+		SetVariantInt(TEAM_ZOMBIES);
+		AcceptEntityInput(ent, "SetTeam");
+	}
 	
 	// A better approach is needed later where we force zombies onto the team to fill in the gap
 	bool survivorsExist = false;
@@ -478,6 +482,7 @@ void Survivor_Setup(const int client)
 	}
 
 	TF2_RespawnPlayer(client);
+	TF2_RegeneratePlayer(client);
 	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 0));
 }
 
