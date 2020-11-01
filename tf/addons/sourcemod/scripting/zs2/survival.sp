@@ -37,19 +37,23 @@ void ST_IntroMusic()
 char[] ST_DefaultIntroMusic(char[] strval)
 {
 	if (strval == "-bloodharvest")
-		strval = "zs2/intro_st/bloodharvest_m22050.wav";
+		strval = "zs2/intro_st/bloodharvest.mp3";
 	else if (strval == "-crashcourse")
-		strval = "zs2/intro_st/crashcourse_m22050.wav";
+		strval = "zs2/intro_st/crashcourse.mp3";
 	else if (strval == "-darkcarnival")
-		strval = "zs2/intro_st/darkcarnival_m22050.wav";
+		strval = "zs2/intro_st/darkcarnival.mp3";
+	else if (strval == "-deadair")
+		strval = "zs2/intro_st/deadair.mp3";
 	else if (strval == "-deathtoll")
-		strval = "zs2/intro_st/deathtoll_m22050.wav";
+		strval = "zs2/intro_st/deathtoll.mp3";
 	else if (strval == "-hardrain")
-		strval = "zs2/intro_st/hardrain_m22050.wav";
+		strval = "zs2/intro_st/hardrain.mp3";
 	else if (strval == "-nomercy")
-		strval = "zs2/intro_st/nomercy_m22050.wav";
+		strval = "zs2/intro_st/nomercy.mp3";
 	else if (strval == "-swampfever")
-		strval = "zs2/intro_st/swampfever_m22050.wav";
+		strval = "zs2/intro_st/swampfever.mp3";
+	else if (strval == "-theparish")
+		strval = "zs2/intro_st/theparish.mp3";
 	return strval;
 }
 
