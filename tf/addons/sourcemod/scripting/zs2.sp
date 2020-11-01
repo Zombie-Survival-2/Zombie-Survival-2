@@ -404,6 +404,8 @@ void Survivor_Setup(const int client)
 	{
 		ChangeClientTeam(client, TEAM_SURVIVORS);
 	}
+	return Plugin_Continue;
+}
 
 	TF2_RespawnPlayer(client);
 	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 0));
