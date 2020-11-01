@@ -115,8 +115,12 @@ public void OnMapStart() {
 	// Wav files need to be changed to mp3 wherever possible, will require re-render on Jack's end
 	PrecacheSound("zs2/intro_cp/bloodharvest.mp3");
 	AddFileToDownloadsTable("sound/zs2/intro_cp/bloodharvest.mp3");
+	PrecacheSound("zs2/intro_cp/crashcourse.mp3");
+	AddFileToDownloadsTable("sound/zs2/intro_cp/crashcourse.mp3");
 	PrecacheSound("zs2/intro_st/bloodharvest.mp3");
 	AddFileToDownloadsTable("sound/zs2/intro_st/bloodharvest.mp3");
+	PrecacheSound("zs2/intro_st/darkcarnival.mp3");
+	AddFileToDownloadsTable("sound/zs2/intro_st/darkcarnival.mp3");
 }
 
 public void OnConfigsExecuted()
