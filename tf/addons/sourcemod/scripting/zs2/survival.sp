@@ -12,9 +12,9 @@ void ST_IntroMusic()
 	if (serverdata != null)
 	{
 		DebugText("Map script located");
-		char strval[64];
+		char strval[64] = "";
 		serverdata.GetString("st_intro", strval, sizeof(strval));
-		if (strval != null)
+		if (!StrEqual(strval, ""))
 		{
 			DebugText("ST intro music located");
 			for (int i = 1; i <= MaxClients; i++)

@@ -11,9 +11,9 @@ void CP_IntroMusic()
 	if (serverdata != null)
 	{
 		DebugText("Map script located");
-		char strval[64];
+		char strval[64] = "";
 		serverdata.GetString("cp_intro", strval, sizeof(strval));
-		if (strval != null)
+		if (!StrEqual(strval, ""))
 		{
 			DebugText("CP intro music located");
 			for (int i = 1; i <= MaxClients; i++)

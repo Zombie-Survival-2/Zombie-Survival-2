@@ -693,34 +693,6 @@ JSON_Object ReadScript(char[] name)
 	return null;
 }
 
-/* Entity firing
-==================================================================================================== */
-
-bool EntFire(char[] strTargetname, char[] strInput, char strParameter[] = "", float flDelay = 0.0) {
-	char strBuffer[256];
-	Format(strBuffer, sizeof(strBuffer), "OnUser1 %s:%s:%s:%f:1", strTargetname, strInput, strParameter, flDelay);
-	int entity = CreateEntityByName("info_target");
-	if (IsValidEdict(entity)) {
-		DispatchSpawn(entity);
-		ActivateEntity(entity);
-		SetVariantString(strBuffer);
-		AcceptEntityInput(entity, "AddOutput");
-		AcceptEntityInput(entity, "FireUser1");
-		RequestFrame(DeleteEntity, EntIndexToEntRef(entity));
-		return true;
-	}
-	return false;
-}
-
-void DeleteEntity(int ref)
-{
-	int entity = EntRefToEntIndex(ref);
-	
-	if (IsValidEntity(entity)) {
-		RemoveEdict(entity);
-	}
-}
-
 /* Custom Functions
 ==================================================================================================== */
 
