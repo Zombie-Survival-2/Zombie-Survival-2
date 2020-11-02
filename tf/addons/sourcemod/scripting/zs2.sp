@@ -94,6 +94,8 @@ public void OnPluginStart()
 
 	// Listeners
 	AddCommandListener(Listener_JoinTeam, "jointeam");
+	AddCommandListener(Listener_JoinClass, "joinclass");
+	AddCommandListener(Listener_Build, "build");
 
 	// Translations
 	LoadTranslations("common.phrases");
@@ -270,7 +272,7 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) {
 	if (!survivorsExist)
 	{
 		DebugText("No survivors, forcing a zombie team victory");
-		int entity = CreateEntityByName("game_round_win");
+		int entity = CreateEntityByName("game_round_win"); // i'd recommend using mp_forcewin rather than using an entity
 		if (IsValidEdict(entity)) {
 			DispatchSpawn(entity);
 			ActivateEntity(entity);
@@ -350,6 +352,32 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 	}
 
 	return Plugin_Handled;
+}
+
+Action Listener_JoinClass(int client, const char[] command, int args)
+{
+	char arg[16];
+	GetCmdArg(1, arg, sizeof(arg));
+
+	if (GetClientTeam(client) == TEAM_SURVIVORS && !IsAllowedClass(TF2_GetClass(arg)))
+	{
+		return Plugin_Handled;
+	}
+
+	return Plugin_Continue;
+}
+
+Action Listener_Build(int client, const char[] command, int args)
+{
+	char arg[16];
+	GetCmdArg(1, arg, sizeof(arg));
+
+	if (client && !strcmp(arg, "obj_sentrygun"))
+	{
+		return Plugin_Handled;
+	}
+
+	return Plugin_Continue;
 }
 
 Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom)
@@ -699,6 +727,17 @@ JSON_Object ReadScript(char[] name)
 bool IsValidClient(const int client)
 {
 	return 1 <= client <= MaxClients && IsClientInGame(client);
+}
+
+bool IsAllowedClass(const TFClassType class)
+{
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsValidClient(i) && GetClientTeam(i) == TEAM_SURVIVORS && TF2_GetPlayerClass(i) == class)
+			return false;
+	}
+
+	return true;
 }
 
 /* Debug output
