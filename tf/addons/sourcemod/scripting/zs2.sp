@@ -340,7 +340,7 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 	char arg[8];
 	GetCmdArg(1, arg, sizeof(arg));
 
-	if (StrContains(arg, "spec", false) > -1)
+	if (!CheckCommandAccess(client, "", ADMFLAG_KICK) && StrContains(arg, "spec", false) > -1)
 	{
 		return Plugin_Handled;
 	}
