@@ -372,7 +372,7 @@ Action Listener_Build(int client, const char[] command, int args)
 	char arg[16];
 	GetCmdArg(1, arg, sizeof(arg));
 
-	if (client && !strcmp(arg, "obj_sentrygun"))
+	if (client && GetClientTeam(client) == TEAM_ZOMBIES && (!strcmp(arg, "obj_sentrygun") || !strcmp(arg, "obj_dispenser")))
 	{
 		return Plugin_Handled;
 	}
