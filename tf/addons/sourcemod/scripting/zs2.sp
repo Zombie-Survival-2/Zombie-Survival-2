@@ -11,6 +11,7 @@
 #include <advanced_motd>
 #include <json>
 #include <morecolors>
+#include <nativevotes>
 
 #include "zs2/defend.sp"
 #include "zs2/survival.sp"
@@ -36,12 +37,25 @@ public Plugin myinfo = {
 };
 
 // Variables
+
+public const char gamemods[5][] = { "Attack", "Survival", "Defend", "Scavenge", "Rounds" };
+
+enum GameMod 
+{
+	Game_Attack,
+	Game_Survival,
+	Game_Defend,
+	Game_Scavenge,
+	Game_Rounds
+};
+
 bool setupTime,
 	roundStarted,
 	waitingForPlayers,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
-int TEAM_SURVIVORS = 2,
+int gameMod,
+	TEAM_SURVIVORS = 2,
 	TEAM_ZOMBIES = 3,
 	queuePoints[MAXPLAYERS+1], 
 	damageDealt[MAXPLAYERS+1];	
@@ -258,7 +272,7 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) {
 		AcceptEntityInput(ent, "SetTeam");
 	}
 	
-	// A better approach is needed later where we force zombies onto the team to fill in the gap
+	// Ummmm.... GetTeamClientCount(TEAM_SURVIVORS) == 0?
 	bool survivorsExist = false;
 	for (int i = 1; i <= MaxClients; i++)
 	{
@@ -269,6 +283,7 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) {
 				survivorsExist = true;
 		}
 	}
+
 	if (!survivorsExist)
 	{
 		DebugText("No survivors, forcing a zombie team victory");
@@ -279,6 +294,56 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) {
 			SetVariantInt(TEAM_ZOMBIES);
 			AcceptEntityInput(entity, "SetTeam");
 			AcceptEntityInput(entity, "RoundWin");
+		}
+	}
+	else 
+	{
+		VoteGamemod();
+	}
+}
+
+void VoteGamemod()
+{
+	NativeVote vote = new NativeVote(GameVote, NativeVotesType_Custom_Mult);
+	vote.Initiator = NATIVEVOTES_SERVER_INDEX;
+	vote.SetDetails("Vote for the next mode:");
+
+	for(int i = 0; i < 5; i++)
+	{
+		vote.AddItem(gamemods[i], gamemods[i]);
+	}
+
+	vote.DisplayVoteToAll(10);
+}
+
+public int GameVote(NativeVote vote, MenuAction action, int param1, int param2)
+{
+	switch (action)
+	{
+		case MenuAction_End:
+		{
+			vote.Close();
+		}
+		
+		case MenuAction_VoteCancel:
+		{
+			if (param1 == VoteCancel_NoVotes)
+			{
+				vote.DisplayFail(NativeVotesFail_NotEnoughVotes);
+			}
+			else
+			{
+				vote.DisplayFail(NativeVotesFail_Generic);
+			}
+		}
+		
+		case MenuAction_VoteEnd:
+		{
+			char info[16];
+			NativeVotes_GetItem(vote, param1, info, sizeof(info));
+			int votes, totalVotes;
+			NativeVotes_GetInfo(param2, votes, totalVotes);
+			vote.DisplayPassCustom("The chosen mode is: %s (%d/%d)", info, votes, totalVotes);
 		}
 	}
 }
