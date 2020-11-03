@@ -13,9 +13,6 @@
 #include <morecolors>
 #include <nativevotes>
 
-#include "zs2/defend.sp"
-#include "zs2/survival.sp"
-
 #pragma newdecls required
 
 /* Global variables and plugin information
@@ -72,6 +69,9 @@ ConVar gcv_debug,
 
 /* Plugin initialisation
 ==================================================================================================== */
+
+#include "zs2/defend.sp" // These must be included AFTER the variables, or else it'll cause critical bugs.
+#include "zs2/survival.sp"
 
 public void OnPluginStart()
 {
