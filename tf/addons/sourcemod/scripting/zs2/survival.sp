@@ -3,6 +3,16 @@ public void Survival_RoundStart()
 	ST_IntroMusic();
 	ST_DisableObjectives();
 	gameMod = Game_Survival;
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsValidClient(i))
+		{
+			if (GetClientTeam(i) == TEAM_SURVIVORS)
+				CPrintToChat(i, "%s {normal}Survival: {haunted}Don't die!", MESSAGE_PREFIX);
+			else
+				CPrintToChat(i, "%s {normal}Survival: {haunted}Kill them all!", MESSAGE_PREFIX);
+		}
+	}
 }
 
 void ST_IntroMusic()
