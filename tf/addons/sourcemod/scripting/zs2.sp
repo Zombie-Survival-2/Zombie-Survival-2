@@ -35,9 +35,15 @@ public Plugin myinfo = {
 
 // Variables
 
-public const char gamemods[5][] = { "Attack", "Survival", "Defend", "Scavenge", "Rounds" };
+public const char gamemods[5][] = { 
+	"Attack", 
+	"Survival", 
+	"Defend", 
+	"Scavenge", 
+	"Rounds" 
+};
 
-enum GameMod 
+enum GameMod
 {
 	Game_Attack,
 	Game_Survival,
@@ -51,6 +57,7 @@ bool setupTime,
 	waitingForPlayers,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
+
 int gameMod,
 	TEAM_SURVIVORS = 2,
 	TEAM_ZOMBIES = 3,
@@ -70,7 +77,7 @@ ConVar gcv_debug,
 /* Plugin initialisation
 ==================================================================================================== */
 
-#include "zs2/defend.sp" // These must be included AFTER the variables, or else it'll cause critical bugs.
+#include "zs2/defend.sp"
 #include "zs2/survival.sp"
 
 public void OnPluginStart()
@@ -434,10 +441,10 @@ Action Listener_JoinClass(int client, const char[] command, int args)
 
 Action Listener_Build(int client, const char[] command, int args)
 {
-	char arg[16];
+	char arg[2];
 	GetCmdArg(1, arg, sizeof(arg));
 
-	if (client && GetClientTeam(client) == TEAM_ZOMBIES && (!strcmp(arg, "obj_sentrygun") || !strcmp(arg, "obj_dispenser")))
+	if (client && GetClientTeam(client) == TEAM_ZOMBIES && strcmp(arg, "1") != 0) // 1 = entrance and exit teleporters
 	{
 		return Plugin_Handled;
 	}
@@ -751,7 +758,7 @@ Action Timer_PlaytimePoints(Handle timer)
 int GetClientWithMostQueuePoints(bool[] myArray, bool mark=true)
 {
 	int chosen = 0;
-
+	
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (IsValidClient(i) && queuePoints[i] >= queuePoints[chosen] && !myArray[i])
