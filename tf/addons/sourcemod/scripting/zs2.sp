@@ -23,6 +23,7 @@
 #define MESSAGE_PREFIX_NO_COLOR "[ZS2]"
 #define PLUGIN_VERSION "0.1 Beta"
 #define MOTD_VERSION "0.1"
+#define MAP_HAS_SETUP (strncmp(mapName, "cp_", 3) == 0 || strncmp(mapName, "pl_", 3) == 0)
 
 // Plugin information
 public Plugin myinfo = {
@@ -55,12 +56,13 @@ enum GameMod
 Handle g_hRoundTimer;
 GameMod gameMod = Game_Survival;
 
-bool isArenaMap,
-		setupTime,
-		roundStarted,
-		waitingForPlayers,
-		firstConnection[MAXPLAYERS+1] = {true, ...},
-		selectedAsSurvivor[MAXPLAYERS+1];
+char mapName[64];
+
+bool setupTime,
+	roundStarted,
+	waitingForPlayers,
+	firstConnection[MAXPLAYERS+1] = {true, ...},
+	selectedAsSurvivor[MAXPLAYERS+1];
 
 int g_iRemaining, 
 	TEAM_SURVIVORS = 2,
@@ -151,9 +153,8 @@ public void OnMapStart() {
 	AddFileToDownloadsTable("sound/zs2/intro_st/darkcarnival.mp3");
 
 	delete g_hRoundTimer;
-	isArenaMap = false;
-	if(FindEntityByClassname(-1, "tf_logic_arena") != -1)
-		isArenaMap = true;
+
+	GetCurrentMap(mapName, sizeof(mapName));
 }
 
 public void OnConfigsExecuted()
@@ -281,12 +282,25 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 				Survival_RoundStart();
 		}
 
-		setupTime = true;
+		setupTime = MAP_HAS_SETUP;
+		DebugText("setupTime = %i", setupTime ? 1 : 0);
+
+		if(!setupTime)
+		{
+			SetupFinish();
+		}
+
 		roundStarted = true;
 	}
 }
 
-void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) {
+void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) 
+{
+	SetupFinish();
+}
+
+void SetupFinish()
+{
 	setupTime = false;
 	
 	// Disable resupply lockers for survivors
@@ -309,9 +323,19 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) {
 			AcceptEntityInput(entity, "RoundWin");
 		}
 	}
-
-	if(!isArenaMap)
+	else 
 	{
+		ent = FindEntityByClassname(-1, "team_round_timer");
+		if(ent != -1)
+		{
+			DebugText("team_round_timer is NOT -1, pausing");
+			AcceptEntityInput(ent, "Pause");
+		}
+		else 
+		{
+			DebugText("team_round_timer is -1, nothing to pause");	
+		}
+
 		g_iRemaining = 400;
 		g_hRoundTimer = CreateTimer(1.0, RoundTimer, _, TIMER_REPEAT);
 	}
@@ -424,10 +448,15 @@ void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 	}
 
 	roundStarted = false;
+	delete g_hRoundTimer;
 	
 	VoteGamemod();
-
-	delete g_hRoundTimer;
+	
+	int ent = FindEntityByClassname(-1, "team_round_timer");
+	if(ent != -1)
+	{
+		AcceptEntityInput(ent, "Resume");
+	}
 
 	if (GetTeamClientCount(TEAM_SURVIVORS) == 1 && team == TEAM_ZOMBIES) // Important! Call switch after `roundStarted` is set to false.
 	{
