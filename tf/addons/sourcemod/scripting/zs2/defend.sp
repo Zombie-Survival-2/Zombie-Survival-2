@@ -1,6 +1,7 @@
 public void Defend_RoundStart()
 {
 	CP_IntroMusic();
+	ST_EnableObjectives();
 	gameMod = Game_Defend;
 	for (int i = 1; i <= MaxClients; i++)
 	{
@@ -27,6 +28,20 @@ void CP_IntroMusic()
 		{
 			if (IsValidClient(i))
 				EmitSoundToClient(i, strval, i);
+		}
+	}
+}
+
+void ST_EnableObjectives()
+{
+	char captures[5][32] = { "team_control_point_master", "team_control_point", "trigger_capture_area", "item_teamflag", "func_capturezone" };
+	int ent = -1;
+	
+	for (int i = 0; i < 5; i++)
+	{
+		while ((ent = FindEntityByClassname(ent, captures[i])) != -1)
+		{
+			AcceptEntityInput(ent, "Enable");
 		}
 	}
 }
