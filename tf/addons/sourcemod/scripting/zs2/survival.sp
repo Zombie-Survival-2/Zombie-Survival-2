@@ -2,6 +2,7 @@ public void Survival_RoundStart()
 {
 	ST_IntroMusic();
 	ST_DisableObjectives();
+	gameMod = Game_Survival;
 }
 
 void ST_IntroMusic()
@@ -11,17 +12,12 @@ void ST_IntroMusic()
 	JSON_Object serverdata = ReadScript(map);
 	if (serverdata != null)
 	{
-		DebugText("Map script located");
-		char strval[64] = "";
+		char strval[64];
 		serverdata.GetString("st_intro", strval, sizeof(strval));
-		if (!StrEqual(strval, ""))
+		for (int i = 1; i <= MaxClients; i++)
 		{
-			DebugText("ST intro music located");
-			for (int i = 1; i <= MaxClients; i++)
-			{
-				if (IsValidClient(i))
-					EmitSoundToClient(i, strval, i);
-			}
+			if (IsValidClient(i))
+				EmitSoundToClient(i, strval, i);
 		}
 	}
 }
