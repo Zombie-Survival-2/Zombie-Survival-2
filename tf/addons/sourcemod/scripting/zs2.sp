@@ -35,32 +35,35 @@ public Plugin myinfo = {
 
 // Variables
 
-public const char gamemods[5][] = { 
-	"Attack", 
-	"Survival", 
-	"Defend", 
-	"Scavenge", 
-	"Rounds" 
+public const char gamemods[2][] = {
+	// "Attack",
+	"Defend",
+	"Survival"
+	// "Waves",
+	// "Scavenge"
 };
 
 enum GameMod
 {
-	Game_Attack,
-	Game_Survival,
+	// Game_Attack,
 	Game_Defend,
-	Game_Scavenge,
-	Game_Rounds
+	Game_Survival
+	// Game_Waves,
+	// Game_Scavenge
 };
 
+Handle g_hRoundTimer;
 GameMod gameMod = Game_Survival;
 
-bool setupTime,
-	roundStarted,
-	waitingForPlayers,
-	firstConnection[MAXPLAYERS+1] = {true, ...},
-	selectedAsSurvivor[MAXPLAYERS+1];
+bool isArenaMap,
+		setupTime,
+		roundStarted,
+		waitingForPlayers,
+		firstConnection[MAXPLAYERS+1] = {true, ...},
+		selectedAsSurvivor[MAXPLAYERS+1];
 
-int TEAM_SURVIVORS = 2,
+int g_iRemaining, 
+	TEAM_SURVIVORS = 2,
 	TEAM_ZOMBIES = 3,
 	queuePoints[MAXPLAYERS+1], 
 	damageDealt[MAXPLAYERS+1];	
@@ -74,12 +77,14 @@ ConVar gcv_debug,
 	gcv_playtimepoints,
 	gcv_killpoints,
 	gcv_assistpoints;
-
-/* Plugin initialisation
-==================================================================================================== */
+	
+// Method includes
 
 #include "zs2/defend.sp"
 #include "zs2/survival.sp"
+
+/* Plugin initialisation
+==================================================================================================== */
 
 public void OnPluginStart()
 {
@@ -136,7 +141,6 @@ public void OnMapStart() {
 	AddFileToDownloadsTable("sound/zs2/oneleft.mp3");
 	PrecacheSound("zs2/victory.mp3");
 	AddFileToDownloadsTable("sound/zs2/victory.mp3");
-	// Wav files need to be changed to mp3 wherever possible, will require re-render on Jack's end
 	PrecacheSound("zs2/intro_cp/bloodharvest.mp3");
 	AddFileToDownloadsTable("sound/zs2/intro_cp/bloodharvest.mp3");
 	PrecacheSound("zs2/intro_cp/crashcourse.mp3");
@@ -145,6 +149,11 @@ public void OnMapStart() {
 	AddFileToDownloadsTable("sound/zs2/intro_st/bloodharvest.mp3");
 	PrecacheSound("zs2/intro_st/darkcarnival.mp3");
 	AddFileToDownloadsTable("sound/zs2/intro_st/darkcarnival.mp3");
+
+	delete g_hRoundTimer;
+	isArenaMap = false;
+	if(FindEntityByClassname(-1, "tf_logic_arena") != -1)
+		isArenaMap = true;
 }
 
 public void OnConfigsExecuted()
@@ -262,31 +271,18 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 		}
 		
 		// Dynamically call methods based on current mode
-		StartRound();
+		switch (gameMod)
+		{
+			case Game_Defend:
+				Defend_RoundStart();
+			case Game_Survival: 
+				Survival_RoundStart();
+			default:
+				Survival_RoundStart();
+		}
 
 		setupTime = true;
 		roundStarted = true;
-	}
-}
-
-void StartRound()
-{
-	switch(gameMod)
-	{
-		case Game_Survival: 
-		{
-			Survival_RoundStart();
-		}
-
-		case Game_Defend:
-		{
-			Defend_RoundStart();
-		}
-
-		default: // keep this until we finish all the othe
-		{
-			Survival_RoundStart();
-		}
 	}
 }
 
@@ -313,51 +309,80 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) {
 			AcceptEntityInput(entity, "RoundWin");
 		}
 	}
-	else 
+
+	if(!isArenaMap)
 	{
-		VoteGamemod();
+		g_iRemaining = 400;
+		g_hRoundTimer = CreateTimer(1.0, RoundTimer, _, TIMER_REPEAT);
 	}
+}
+
+public Action RoundTimer(Handle hTimer)
+{
+	g_iRemaining--;
+	SetHudTextParams(-1.0, 0.15, 1.1, 255, 255, 255, 255);
+
+	for(int i = 1; i <= MaxClients; i++)
+	{
+		if(IsValidClient(i) && !IsFakeClient(i))
+			ShowHudText(i, -1, "%02d:%02d", g_iRemaining / 60, g_iRemaining % 60);
+	}
+
+	if(g_iRemaining <= 0)
+	{
+		DebugText("Forcing a survivor team victory");
+		int entity = CreateEntityByName("game_round_win");
+		if (IsValidEdict(entity)) {
+			DispatchSpawn(entity);
+			ActivateEntity(entity);
+			SetVariantInt(TEAM_SURVIVORS);
+			AcceptEntityInput(entity, "SetTeam");
+			AcceptEntityInput(entity, "RoundWin");
+		}
+		g_hRoundTimer = INVALID_HANDLE;
+		return Plugin_Stop;
+	}
+
+	return Plugin_Continue;
 }
 
 void VoteGamemod()
 {
 	NativeVote vote = new NativeVote(GameVote, NativeVotesType_Custom_Mult);
 	vote.Initiator = NATIVEVOTES_SERVER_INDEX;
-	vote.SetDetails("Vote for the next mode:");
+	vote.SetDetails("Select next round type:");
 	char info[2];
 
-	for(int i = 0; i < 5; i++)
+	for (int i = 0; i < 2; i++)
 	{
 		IntToString(i, info, sizeof(info));
 		vote.AddItem(info, gamemods[i]);
 	}
 
-	vote.DisplayVoteToAll(10);
+	vote.DisplayVoteToAll(13);
 }
 
-public int GameVote(NativeVote vote, MenuAction action, int param1, int param2) // https://forums.alliedmods.net/showpost.php?p=2669519&postcount=257
+// https://forums.alliedmods.net/showpost.php?p=2694813&postcount=260
+// https://forums.alliedmods.net/showpost.php?p=2669519&postcount=257
+public int GameVote(NativeVote vote, MenuAction action, int param1, int param2)
 {
 	switch (action)
 	{
 		case MenuAction_End:
-		{
 			vote.Close();
-		}
-		
 		case MenuAction_VoteCancel:
 		{
 			if (param1 == VoteCancel_NoVotes)
 			{
-				// We didn't have enough votes. Display the not enough votes fail message.
+				DebugText("Not enough votes for next round type");
 				vote.DisplayFail(NativeVotesFail_NotEnoughVotes);
 			}
 			else
 			{
-				// We were actually cancelled. Display the generic fail message
+				DebugText("Next round type vote cancelled");
 				vote.DisplayFail(NativeVotesFail_Generic);
 			}
 		}
-		
 		case MenuAction_VoteEnd:
 		{
 			char info[2];
@@ -365,8 +390,8 @@ public int GameVote(NativeVote vote, MenuAction action, int param1, int param2) 
 			int i = StringToInt(info);
 			int votes, totalVotes;
 			NativeVotes_GetInfo(param2, votes, totalVotes);
-			vote.DisplayPassCustom("The chosen mode is: %s (%d/%d)", gamemods[i], votes, totalVotes);
-			CPrintToChatAll("%s The next mode is: %s (%d/%d).", MESSAGE_PREFIX, gamemods[i], votes, totalVotes);
+			vote.DisplayPassCustom("The next round type will be %s (%d/%d).", gamemods[i], votes, totalVotes);
+			CPrintToChatAll("%s {haunted}The next round type will be {normal}%s {haunted}(%d/%d).", MESSAGE_PREFIX, gamemods[i], votes, totalVotes);
 			gameMod = view_as<GameMod>(i);
 		}
 	}
@@ -399,6 +424,10 @@ void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 	}
 
 	roundStarted = false;
+	
+	VoteGamemod();
+
+	delete g_hRoundTimer;
 
 	if (GetTeamClientCount(TEAM_SURVIVORS) == 1 && team == TEAM_ZOMBIES) // Important! Call switch after `roundStarted` is set to false.
 	{
@@ -450,6 +479,7 @@ Action Listener_JoinClass(int client, const char[] command, int args)
 
 	if (GetClientTeam(client) == TEAM_SURVIVORS && !IsAllowedClass(TF2_GetClass(arg)))
 	{
+		EmitSoundToClient(client, "zs2/death.mp3", client); // Placeholder sound
 		return Plugin_Handled;
 	}
 
@@ -516,56 +546,56 @@ Action Event_PlayerRegen(Event event, const char[] name, bool dontBroadcast)
 
 Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 {
+	int victim = GetClientOfUserId(event.GetInt("userid"));
+	int assister = GetClientOfUserId(event.GetInt("assister"));
+	int attacker = GetClientOfUserId(event.GetInt("attacker"));
+	int team = GetClientTeam(victim);
+
 	if (!waitingForPlayers && !setupTime)
 	{
-		int victim = GetClientOfUserId(event.GetInt("userid"));
-		int assister = GetClientOfUserId(event.GetInt("assister"));
-		int attacker = GetClientOfUserId(event.GetInt("attacker"));
-
-		// This part deals with victim only
-
-		int team = GetClientTeam(victim);
-
-		if (roundStarted && team == TEAM_SURVIVORS)
+		if (team == TEAM_SURVIVORS && roundStarted)
 		{
-			EmitSoundToClient(victim, "zs2/death.mp3", victim);
-			
-			int survivorsLiving = 0;
-			for (int i = 1; i <= MaxClients; i++)
+			if (!setupTime)
 			{
-				if (IsValidClient(i) && i != victim)
-				{
-					int iteam = GetClientTeam(i);
-					if (iteam == TEAM_SURVIVORS)
-					{
-						survivorsLiving++;
-					}
-				}
-			}
-			DebugText("%i survivors are alive", survivorsLiving);
-			if (survivorsLiving == 1)
-			{
-				DebugText("Playing one left music");
+				EmitSoundToClient(victim, "zs2/death.mp3", victim);
+				
+				int survivorsLiving = 0;
 				for (int i = 1; i <= MaxClients; i++)
 				{
-					if (IsValidClient(i))
-						EmitSoundToClient(i, "zs2/oneleft.mp3", i);
+					if (IsValidClient(i) && i != victim)
+					{
+						int iteam = GetClientTeam(i);
+						if (iteam == TEAM_SURVIVORS)
+						{
+							survivorsLiving++;
+						}
+					}
 				}
-			}
-			else if (survivorsLiving == 0)
-			{
-				DebugText("Forcing a zombie team victory");
-				int entity = CreateEntityByName("game_round_win");
-				if (IsValidEdict(entity)) {
-					DispatchSpawn(entity);
-					ActivateEntity(entity);
-					SetVariantInt(TEAM_ZOMBIES);
-					AcceptEntityInput(entity, "SetTeam");
-					AcceptEntityInput(entity, "RoundWin");
+				DebugText("%i survivors are alive", survivorsLiving);
+				if (survivorsLiving == 1)
+				{
+					DebugText("Playing one left music");
+					for (int i = 1; i <= MaxClients; i++)
+					{
+						if (IsValidClient(i))
+							EmitSoundToClient(i, "zs2/oneleft.mp3", i);
+					}
 				}
+				else if (survivorsLiving == 0)
+				{
+					DebugText("Forcing a zombie team victory");
+					int entity = CreateEntityByName("game_round_win");
+					if (IsValidEdict(entity)) {
+						DispatchSpawn(entity);
+						ActivateEntity(entity);
+						SetVariantInt(TEAM_ZOMBIES);
+						AcceptEntityInput(entity, "SetTeam");
+						AcceptEntityInput(entity, "RoundWin");
+					}
+				}
+				
+				RequestFrame(Zombie_Setup, victim);
 			}
-			
-			RequestFrame(Zombie_Setup, victim);
 		}
 
 		if (attacker < 1 || !IsValidClient(attacker) || victim == attacker)
@@ -583,6 +613,13 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 			{
 				queuePoints[assister] += gcv_assistpoints.IntValue;
 			}
+		}
+	}
+	else if (setupTime)
+	{
+		if(team == TEAM_SURVIVORS)
+		{
+			RequestFrame(Survivor_Setup, victim);
 		}
 	}
 	return Plugin_Continue;
