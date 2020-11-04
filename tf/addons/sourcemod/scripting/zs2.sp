@@ -52,14 +52,15 @@ enum GameMod
 	Game_Rounds
 };
 
+GameMod gameMod = Game_Survival;
+
 bool setupTime,
 	roundStarted,
 	waitingForPlayers,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
 
-int gameMod,
-	TEAM_SURVIVORS = 2,
+int TEAM_SURVIVORS = 2,
 	TEAM_ZOMBIES = 3,
 	queuePoints[MAXPLAYERS+1], 
 	damageDealt[MAXPLAYERS+1];	
@@ -185,6 +186,7 @@ void InsertServerTag(const char[] insertThisTag)
 
 public void OnClientPutInServer(int client)
 {
+	firstConnection[client] = true;
 	SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
 	CreateTimer(5.0, Timer_DisplayIntro, client);
 }
@@ -194,7 +196,6 @@ public void OnClientDisconnect(int client)
 	queuePoints[client] = 0;
 	damageDealt[client] = 0;
 	selectedAsSurvivor[client] = false;
-	firstConnection[client] = true;
 }
 
 Action Timer_DisplayIntro(Handle timer, int client) 
@@ -261,10 +262,31 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 		}
 		
 		// Dynamically call methods based on current mode
-		Survival_RoundStart();
+		StartRound();
 
 		setupTime = true;
 		roundStarted = true;
+	}
+}
+
+void StartRound()
+{
+	switch(gameMod)
+	{
+		case Game_Survival: 
+		{
+			Survival_RoundStart();
+		}
+
+		case Game_Defend:
+		{
+			Defend_RoundStart();
+		}
+
+		default: // keep this until we finish all the othe
+		{
+			Survival_RoundStart();
+		}
 	}
 }
 
@@ -278,20 +300,8 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) {
 		SetVariantInt(TEAM_ZOMBIES);
 		AcceptEntityInput(ent, "SetTeam");
 	}
-	
-	// Ummmm.... GetTeamClientCount(TEAM_SURVIVORS) == 0?
-	bool survivorsExist = false;
-	for (int i = 1; i <= MaxClients; i++)
-	{
-		if (IsValidClient(i))
-		{
-			int iteam = GetClientTeam(i);
-			if (iteam == TEAM_SURVIVORS)
-				survivorsExist = true;
-		}
-	}
 
-	if (!survivorsExist)
+	if (GetTeamClientCount(TEAM_SURVIVORS) == 0)
 	{
 		DebugText("No survivors, forcing a zombie team victory");
 		int entity = CreateEntityByName("game_round_win"); // i'd recommend using mp_forcewin rather than using an entity
@@ -314,16 +324,18 @@ void VoteGamemod()
 	NativeVote vote = new NativeVote(GameVote, NativeVotesType_Custom_Mult);
 	vote.Initiator = NATIVEVOTES_SERVER_INDEX;
 	vote.SetDetails("Vote for the next mode:");
+	char info[2];
 
 	for(int i = 0; i < 5; i++)
 	{
-		vote.AddItem(gamemods[i], gamemods[i]);
+		IntToString(i, info, sizeof(info));
+		vote.AddItem(info, gamemods[i]);
 	}
 
 	vote.DisplayVoteToAll(10);
 }
 
-public int GameVote(NativeVote vote, MenuAction action, int param1, int param2)
+public int GameVote(NativeVote vote, MenuAction action, int param1, int param2) // https://forums.alliedmods.net/showpost.php?p=2669519&postcount=257
 {
 	switch (action)
 	{
@@ -336,21 +348,26 @@ public int GameVote(NativeVote vote, MenuAction action, int param1, int param2)
 		{
 			if (param1 == VoteCancel_NoVotes)
 			{
+				// We didn't have enough votes. Display the not enough votes fail message.
 				vote.DisplayFail(NativeVotesFail_NotEnoughVotes);
 			}
 			else
 			{
+				// We were actually cancelled. Display the generic fail message
 				vote.DisplayFail(NativeVotesFail_Generic);
 			}
 		}
 		
 		case MenuAction_VoteEnd:
 		{
-			char info[16];
-			NativeVotes_GetItem(vote, param1, info, sizeof(info));
+			char info[2];
+			vote.GetItem(param1, info, sizeof(info));
+			int i = StringToInt(info);
 			int votes, totalVotes;
 			NativeVotes_GetInfo(param2, votes, totalVotes);
-			vote.DisplayPassCustom("The chosen mode is: %s (%d/%d)", info, votes, totalVotes);
+			vote.DisplayPassCustom("The chosen mode is: %s (%d/%d)", gamemods[i], votes, totalVotes);
+			CPrintToChatAll("%s The next mode is: %s (%d/%d).", MESSAGE_PREFIX, gamemods[i], votes, totalVotes);
+			gameMod = view_as<GameMod>(i);
 		}
 	}
 }
