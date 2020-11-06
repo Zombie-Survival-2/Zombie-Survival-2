@@ -65,7 +65,8 @@ bool setupTime,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
 
-int TEAM_SURVIVORS = 2,
+int timerEnt,
+	TEAM_SURVIVORS = 2,
 	TEAM_ZOMBIES = 3,
 	queuePoints[MAXPLAYERS+1], 
 	damageDealt[MAXPLAYERS+1];	
@@ -153,6 +154,7 @@ public void OnMapStart() {
 	AddFileToDownloadsTable("sound/zs2/intro_st/darkcarnival.mp3");
 
 	GetCurrentMap(mapName, sizeof(mapName));
+	timerEnt = FindEntityByClassname(-1, "team_round_timer");
 }
 
 public void OnEntityCreated(int entity, const char[] classname)
@@ -161,17 +163,6 @@ public void OnEntityCreated(int entity, const char[] classname)
 	{
 		AcceptEntityInput(entity, "Kill");
 	}
-	else if(strcmp(classname, "team_round_timer") == 0)
-	{
-		SDKHook(entity, SDKHook_SpawnPost, OnTimerSpawn);
-	}
-}
-
-void OnTimerSpawn(int entity)
-{
-	SetEntProp(entity, Prop_Send, "m_nSetupTimeLength", 13);
-	SetEntProp(entity, Prop_Send, "m_nTimerInitialLength", 600);
-	SetEntProp(entity, Prop_Send, "m_nTimerLength", 600);
 }
 
 public void OnConfigsExecuted()
@@ -251,6 +242,10 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
 	if (!waitingForPlayers)
 	{
+		timerEnt = FindEntityByClassname(-1, "team_round_timer");
+		SetVariantInt(13);
+		AcceptEntityInput(timerEnt, "SetTime");
+
 		int playerCount = GetClientCount(true);
 		int ratio = gcv_ratio.IntValue;
 		if (ratio > 32 || ratio < 1)
@@ -312,6 +307,9 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) 
 {
 	setupTime = false;
+	timerEnt = FindEntityByClassname(-1, "team_round_timer");
+	SetVariantInt(600);
+	AcceptEntityInput(timerEnt, "SetTime");
 	
 	// Disable resupply lockers for survivors
 	int ent = -1;
