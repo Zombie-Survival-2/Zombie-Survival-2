@@ -24,6 +24,7 @@
 #define PLUGIN_VERSION "0.1 Beta"
 #define MOTD_VERSION "0.1"
 #define MAP_HAS_SETUP (strncmp(mapName, "cp_", 3) == 0 || strncmp(mapName, "pl_", 3) == 0)
+#define MAP_IS_KOTH (strncmp(mapName, "koth_", 5) == 0)
 
 // Plugin information
 public Plugin myinfo = {
@@ -64,8 +65,7 @@ bool setupTime,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
 
-int g_iRemaining, 
-	TEAM_SURVIVORS = 2,
+int TEAM_SURVIVORS = 2,
 	TEAM_ZOMBIES = 3,
 	queuePoints[MAXPLAYERS+1], 
 	damageDealt[MAXPLAYERS+1];	
@@ -152,9 +152,26 @@ public void OnMapStart() {
 	PrecacheSound("zs2/intro_st/darkcarnival.mp3");
 	AddFileToDownloadsTable("sound/zs2/intro_st/darkcarnival.mp3");
 
-	delete g_hRoundTimer;
-
 	GetCurrentMap(mapName, sizeof(mapName));
+}
+
+public void OnEntityCreated(int entity, const char[] classname)
+{
+	if(strcmp(classname, "tf_logic_koth") == 0)
+	{
+		AcceptEntityInput(entity, "Kill");
+	}
+	else if(strcmp(classname, "team_round_timer") == 0)
+	{
+		SDKHook(entity, SDKHook_SpawnPost, OnTimerSpawn);
+	}
+}
+
+void OnTimerSpawn(int entity)
+{
+	SetEntProp(entity, Prop_Send, "m_nSetupTimeLength", 13);
+	SetEntProp(entity, Prop_Send, "m_nTimerInitialLength", 600);
+	SetEntProp(entity, Prop_Send, "m_nTimerLength", 600);
 }
 
 public void OnConfigsExecuted()
@@ -278,8 +295,6 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 				Defend_RoundStart();
 			case Game_Survival: 
 				Survival_RoundStart();
-			default:
-				Survival_RoundStart();
 		}
 
 		setupTime = MAP_HAS_SETUP;
@@ -287,7 +302,7 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 
 		if(!setupTime)
 		{
-			SetupFinish();
+			Event_SetupFinished(null, "teamplay_setup_finished", false);
 		}
 
 		roundStarted = true;
@@ -295,11 +310,6 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 }
 
 void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) 
-{
-	SetupFinish();
-}
-
-void SetupFinish()
 {
 	setupTime = false;
 	
@@ -323,51 +333,6 @@ void SetupFinish()
 			AcceptEntityInput(entity, "RoundWin");
 		}
 	}
-	else 
-	{
-		ent = FindEntityByClassname(-1, "team_round_timer");
-		if(ent != -1)
-		{
-			DebugText("team_round_timer is NOT -1, pausing");
-			AcceptEntityInput(ent, "Pause");
-		}
-		else 
-		{
-			DebugText("team_round_timer is -1, nothing to pause");	
-		}
-
-		g_iRemaining = 400;
-		g_hRoundTimer = CreateTimer(1.0, RoundTimer, _, TIMER_REPEAT);
-	}
-}
-
-public Action RoundTimer(Handle hTimer)
-{
-	g_iRemaining--;
-	SetHudTextParams(-1.0, 0.15, 1.1, 255, 255, 255, 255);
-
-	for(int i = 1; i <= MaxClients; i++)
-	{
-		if(IsValidClient(i) && !IsFakeClient(i))
-			ShowHudText(i, -1, "%02d:%02d", g_iRemaining / 60, g_iRemaining % 60);
-	}
-
-	if(g_iRemaining <= 0)
-	{
-		DebugText("Forcing a survivor team victory");
-		int entity = CreateEntityByName("game_round_win");
-		if (IsValidEdict(entity)) {
-			DispatchSpawn(entity);
-			ActivateEntity(entity);
-			SetVariantInt(TEAM_SURVIVORS);
-			AcceptEntityInput(entity, "SetTeam");
-			AcceptEntityInput(entity, "RoundWin");
-		}
-		g_hRoundTimer = INVALID_HANDLE;
-		return Plugin_Stop;
-	}
-
-	return Plugin_Continue;
 }
 
 void VoteGamemod()
@@ -451,12 +416,6 @@ void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 	delete g_hRoundTimer;
 	
 	VoteGamemod();
-	
-	int ent = FindEntityByClassname(-1, "team_round_timer");
-	if(ent != -1)
-	{
-		AcceptEntityInput(ent, "Resume");
-	}
 
 	if (GetTeamClientCount(TEAM_SURVIVORS) == 1 && team == TEAM_ZOMBIES) // Important! Call switch after `roundStarted` is set to false.
 	{
