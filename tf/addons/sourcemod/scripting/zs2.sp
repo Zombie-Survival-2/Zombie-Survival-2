@@ -243,8 +243,29 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 	if (!waitingForPlayers)
 	{
 		timerEnt = FindEntityByClassname(-1, "team_round_timer");
-		SetVariantInt(13);
-		AcceptEntityInput(timerEnt, "SetTime");
+		setupTime = MAP_HAS_SETUP;
+		
+		if(timerEnt == -1)
+		{
+			timerEnt = CreateEntityByName("team_round_timer");
+			DispatchSpawn(timerEnt);
+
+			SetVariantInt(1);
+			AcceptEntityInput(timerEnt, "ShowInHUD");
+
+			SetVariantInt(1);
+			AcceptEntityInput(timerEnt, "AutoCountdown", timerEnt);
+
+			AcceptEntityInput(timerEnt, "Enable");
+			AcceptEntityInput(timerEnt, "Resume");
+			DebugText("NO TIMER FOUND. CREATING ONE");
+		}
+		else 
+		{
+			SetVariantInt(13);
+			AcceptEntityInput(timerEnt, "SetTime");
+			DebugText("Timer Found, setting setup to 13 seconds");
+		}
 
 		int playerCount = GetClientCount(true);
 		int ratio = gcv_ratio.IntValue;
@@ -292,7 +313,6 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 				Survival_RoundStart();
 		}
 
-		setupTime = MAP_HAS_SETUP;
 		DebugText("setupTime = %i", setupTime ? 1 : 0);
 
 		if(!setupTime)
@@ -310,6 +330,7 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 	timerEnt = FindEntityByClassname(-1, "team_round_timer");
 	SetVariantInt(600);
 	AcceptEntityInput(timerEnt, "SetTime");
+	DebugText("Timer is 600 NOW.");
 	
 	// Disable resupply lockers for survivors
 	int ent = -1;
