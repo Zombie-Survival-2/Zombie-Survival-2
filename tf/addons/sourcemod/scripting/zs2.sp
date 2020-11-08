@@ -163,18 +163,35 @@ public void OnMapEnd() {
 
 public void OnEntityCreated(int entity, const char[] classname)
 {
-	if(strcmp(classname, "tf_logic_koth") == 0)
+	if (strcmp(classname, "tf_logic_koth") == 0)
 	{
 		AcceptEntityInput(entity, "KillHierarchy");
 
 		int timer = CreateEntityByName("team_round_timer");
 		DispatchKeyValue(timer, "targetname", "zs2_timer");
-		DispatchKeyValue(timer, "setup_length", "13");
+		char map[64];
+		GetCurrentMap(map, sizeof(map));
+		JSON_Object serverdata = ReadScript(map);
+		if (serverdata != null)
+		{
+			char strval[64];
+			int intval = serverdata.GetInt("t_setup");
+			IntToString(intval, strval, sizeof(strval));
+			DispatchKeyValue(timer, "setup_length", strval);
+			
+			intval = serverdata.GetInt("t_round");
+			IntToString(intval, strval, sizeof(strval));
+			DispatchKeyValue(timer, "timer_length", strval);
+		}
+		else
+		{
+			DispatchKeyValue(timer, "setup_length", "13");
+			DispatchKeyValue(timer, "timer_length", "20");
+		}
 		DispatchKeyValue(timer, "reset_time", "1");
 		DispatchKeyValue(timer, "auto_countdown", "1");
-		DispatchKeyValue(timer, "timer_length", "20");
 		DispatchSpawn(timer);
-
+		
 		SetVariantString("OnSetupStart zs2_timer:ShowInHUD:1:0:-1");
 		AcceptEntityInput(timer, "AddOutput");
 		SetVariantString("OnSetupStart zs2_timer:Resume:0:0:-1");
@@ -234,7 +251,6 @@ public void OnClientPutInServer(int client)
 {
 	firstConnection[client] = true;
 	SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
-	CreateTimer(5.0, Timer_DisplayIntro, client);
 }
 
 public void OnClientDisconnect(int client)
@@ -323,7 +339,7 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 				Survival_RoundStart();
 		}
 
-		if(!setupTime)
+		if (!setupTime)
 		{
 			Event_SetupFinished(null, "teamplay_setup_finished", false);
 		}
@@ -344,8 +360,8 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 		AcceptEntityInput(ent, "SetTeam");
 	}
 	
-	ent = FindEntityByClassname(MaxClients+1, "team_round_timer"); 
-	if(ent != -1)
+	ent = FindEntityByClassname(MaxClients + 1, "team_round_timer");
+	if (ent != -1)
 	{
 		CreateTimer(0.5, SetRoundTime, ent, TIMER_FLAG_NO_MAPCHANGE); 
 	}
@@ -367,15 +383,36 @@ void RoundTimerOnEnd(const char[] output, int caller, int activator, float delay
 
 public Action SetSetup(Handle timer, any ent)
 {
-	SetVariantInt(13);
+	char map[64];
+	GetCurrentMap(map, sizeof(map));
+	JSON_Object serverdata = ReadScript(map);
+	if (serverdata != null)
+	{
+		int intval = serverdata.GetInt("t_setup");
+		SetVariantInt(intval);
+	}
+	else
+		SetVariantInt(30);
+
 	AcceptEntityInput(ent, "SetSetupTime");
 }
 
 public Action SetRoundTime(Handle timer, any ent)
 {
-	SetVariantInt(3600);
+	SetVariantInt(600);
 	AcceptEntityInput(ent, "SetMaxTime");
-	SetVariantInt(20);
+	
+	char map[64];
+	GetCurrentMap(map, sizeof(map));
+	JSON_Object serverdata = ReadScript(map);
+	if (serverdata != null)
+	{
+		int intval = serverdata.GetInt("t_round");
+		SetVariantInt(intval);
+	}
+	else
+		SetVariantInt(300);
+
 	AcceptEntityInput(ent, "SetTime");
 }
 
@@ -423,7 +460,7 @@ public int GameVote(NativeVote vote, MenuAction action, int param1, int param2)
 			int i = StringToInt(info);
 			int votes, totalVotes;
 			NativeVotes_GetInfo(param2, votes, totalVotes);
-			vote.DisplayPassCustom("The next round type will be %s (%d/%d).", gamemods[i], votes, totalVotes);
+			vote.DisplayPassCustom("Round type set to %s", gamemods[i], votes, totalVotes);
 			CPrintToChatAll("%s {haunted}The next round type will be {normal}%s {haunted}(%d/%d).", MESSAGE_PREFIX, gamemods[i], votes, totalVotes);
 			gameMod = view_as<GameMod>(i);
 		}
@@ -498,6 +535,7 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 	if (firstConnection[client])
 	{
 		firstConnection[client] = false;
+		CreateTimer(3.0, Timer_DisplayIntro, client);
 		return Plugin_Continue;
 	}
 
@@ -523,10 +561,9 @@ Action Listener_Build(int client, const char[] command, int args)
 	char arg[2];
 	GetCmdArg(1, arg, sizeof(arg));
 
-	if (client && GetClientTeam(client) == TEAM_ZOMBIES && strcmp(arg, "1") != 0) // 1 = entrance and exit teleporters
-	{
+	// Block everything except teleporters (1)
+	if (client && GetClientTeam(client) == TEAM_ZOMBIES && strcmp(arg, "1") != 0)
 		return Plugin_Handled;
-	}
 
 	return Plugin_Continue;
 }
@@ -553,7 +590,7 @@ Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 		return Plugin_Continue;
 
 	if (GetClientTeam(player) == TEAM_ZOMBIES)
-	{		
+	{
 		RequestFrame(OnlyMelee, player);
 		RequestFrame(RemoveWearable, player);
 	}
@@ -750,9 +787,7 @@ public Action Command_Next(int client, int args)
 		players[j] = GetClientWithMostQueuePoints(checked);
 
 		if (!players[j])
-		{
 			break;
-		}
 	}
 
 	Menu menu = new Menu(Handler_Nothing);
@@ -761,10 +796,7 @@ public Action Command_Next(int client, int args)
 
 	for (int i = 0; i < j; i++)
 	{
-		if (gcv_debug.BoolValue)
-		{
-			DebugText("Player %i on queue menu is client %i", i, players[i]);
-		}
+		DebugText("Player %i on queue menu is client %i", i, players[i]);
 
 		FormatEx(display, sizeof(display), "%N - %i points", players[i], queuePoints[players[i]]);
 		menu.AddItem("x", display, players[i] == client ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED);
@@ -782,7 +814,7 @@ public Action Command_Reset(int client, int args)
 		{
 			for (int i = 0; i < MaxClients; i++)
 				queuePoints[i] = 0;
-			DebugText("All queue points reset to 0.");
+			DebugText("All queue points reset to 0");
 		}
 		else
 			PrintToServer("%s This command is too destructive to be run outside of debug mode.", MESSAGE_PREFIX_NO_COLOR);

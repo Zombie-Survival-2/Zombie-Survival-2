@@ -1,18 +1,10 @@
 {
 	"t_setup": 30,
 	"t_round": 390,
-	"freeze": false,
-	"heartbeat": false,
-	"tank": "zs2/tank/tank1_22050.wav",
 	
-	"cp_a": false,
-	"cp_d": true,
 	"cp_intro": "zs2/intro_cp/crashcourse.mp3",
 	"cp_last": "zs2/last/attacklast_m.wav",
 	
-	"st_s": true,
-	"st_w": true,
-	"st_sc": false,
 	"st_intro": "zs2/intro_st/darkcarnival.mp3",
 	"st_sclast": "zs2/last/scavengelast.wav"
 }
