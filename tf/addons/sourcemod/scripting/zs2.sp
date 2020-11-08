@@ -59,10 +59,10 @@ enum GameMod
 	// Game_Scavenge
 };
 
-Handle g_hRoundTimer;
 GameMod gameMod = Game_Survival;
 
-bool mapStarted,
+bool timerExists,
+	mapStarted,
 	setupTime,
 	roundStarted,
 	waitingForPlayers,
@@ -187,16 +187,19 @@ void OnTimerSpawned(int entity)
 	
 	if (!StrEqual(name, "zs2_timer"))
 	{
+		DebugText("Killed timer '%s'", name);
 		DispatchKeyValue(entity, "auto_countdown", "0");
 	}
 }
 
 void OnCaptureSpawn(int entity)
 {
-	if (!mapStarted || waitingForPlayers)
+	if (!mapStarted || waitingForPlayers || timerExists)
 	{
 		return;
 	}
+
+	DebugText("Created TIMER");
 
 	int timer = CreateEntityByName("team_round_timer");
 	DispatchKeyValue(timer, "targetname", "zs2_timer");
@@ -216,6 +219,7 @@ void OnCaptureSpawn(int entity)
 	AcceptEntityInput(timer, "AddOutput");
 
 	HookSingleEntityOutput(timer, "OnFinished", RoundTimerOnEnd);
+	timerExists = true;
 }
 
 public void OnConfigsExecuted()
@@ -293,8 +297,6 @@ public void TF2_OnWaitingForPlayersEnd()
 
 void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
-	DebugText("Event_RoundStart");
-
 	if (!waitingForPlayers)
 	{
 		setupTime = view_as<bool>(GameRules_GetProp("m_bInSetup"));
@@ -394,6 +396,7 @@ void RoundTimerOnEnd(const char[] output, int caller, int activator, float delay
 	AcceptEntityInput(ent, "Enable");
 	SetVariantInt(TEAM_SURVIVORS);
 	AcceptEntityInput(ent, "SetWinner");
+	timerExists = false;
 }
 
 void VoteGamemod()
@@ -474,7 +477,6 @@ void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 	}
 
 	roundStarted = false;
-	delete g_hRoundTimer;
 	
 	VoteGamemod();
 
