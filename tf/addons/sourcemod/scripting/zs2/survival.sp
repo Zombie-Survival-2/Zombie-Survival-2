@@ -34,7 +34,6 @@ void ST_IntroMusic()
 
 void ST_DisableObjectives()
 {
-	char captures[5][32] = { "team_control_point_master", "team_control_point", "trigger_capture_area", "item_teamflag", "func_capturezone" };
 	int ent = -1;
 	
 	for (int i = 0; i < 5; i++)
