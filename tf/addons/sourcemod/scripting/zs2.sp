@@ -23,8 +23,6 @@
 #define MESSAGE_PREFIX_NO_COLOR "[ZS2]"
 #define PLUGIN_VERSION "0.1 Beta"
 #define MOTD_VERSION "0.1"
-#define MAP_HAS_SETUP (strncmp(mapName, "cp_", 3) == 0 || strncmp(mapName, "pl_", 3) == 0)
-#define MAP_IS_KOTH (strncmp(mapName, "koth_", 5) == 0)
 
 // Plugin information
 public Plugin myinfo = {
@@ -43,6 +41,13 @@ public const char gamemods[2][] = {
 	"Survival"
 	// "Waves",
 	// "Scavenge"
+};
+public const char captures[5][32] = { 
+	"team_control_point_master", 
+	"team_control_point", 
+	"trigger_capture_area", 
+	"item_teamflag", 
+	"func_capturezone" 
 };
 
 enum GameMod
@@ -65,7 +70,7 @@ bool setupTime,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
 
-int timerRef,
+int timerRef = -1,
 	TEAM_SURVIVORS = 2,
 	TEAM_ZOMBIES = 3,
 	queuePoints[MAXPLAYERS+1], 
@@ -157,40 +162,69 @@ public void OnMapStart() {
 }
 
 public void OnMapEnd() {
-	int index = EntRefToEntIndex(timerRef);
-	UnhookSingleEntityOutput(index, "OnFinished", RoundTimerOnEnd);
+	if(timerRef != -1) // Not sure we need this
+	{
+		int index = EntRefToEntIndex(timerRef);
+		UnhookSingleEntityOutput(index, "OnFinished", RoundTimerOnEnd);
+		timerRef = -1;
+	}
 }
 
 public void OnEntityCreated(int entity, const char[] classname)
 {
-	if(strcmp(classname, "tf_logic_koth") == 0)
+	if (strcmp(classname, "tf_logic_koth") == 0)
 	{
 		AcceptEntityInput(entity, "KillHierarchy");
-
-		int timer = CreateEntityByName("team_round_timer");
-		DispatchKeyValue(timer, "targetname", "zs2_timer");
-		DispatchKeyValue(timer, "setup_length", "13");
-		DispatchKeyValue(timer, "reset_time", "1");
-		DispatchKeyValue(timer, "auto_countdown", "1");
-		DispatchKeyValue(timer, "timer_length", "20");
-		DispatchSpawn(timer);
-
-		SetVariantString("OnSetupStart zs2_timer:ShowInHUD:1:0:-1");
-		AcceptEntityInput(timer, "AddOutput");
-		SetVariantString("OnSetupStart zs2_timer:Resume:0:0:-1");
-		AcceptEntityInput(timer, "AddOutput");
-		SetVariantString("OnSetupStart zs2_timer:Enable:0:0:-1");
-		AcceptEntityInput(timer, "AddOutput");
-
-		SetVariantString("OnSetupFinished zs2_timer:ShowInHUD:1:0:-1");
-		AcceptEntityInput(timer, "AddOutput");
-		SetVariantString("OnSetupFinished zs2_timer:Resume:0:0:-1");
-		AcceptEntityInput(timer, "AddOutput");
-		SetVariantString("OnSetupFinished zs2_timer:Enable:0:0:-1");
-		AcceptEntityInput(timer, "AddOutput");
-		HookSingleEntityOutput(timer, "OnFinished", RoundTimerOnEnd);
-		timerRef = EntIndexToEntRef(timer);
 	}
+	else if (strcmp(classname, captures[0]) == 0 || strcmp(classname, captures[1]) == 0 ||
+			strcmp(classname, captures[2]) == 0 || strcmp(classname, captures[3]) == 0 ||
+			strcmp(classname, captures[4]) == 0)
+	{
+		SDKHook(entity, SDKHook_SpawnPost, OnCaptureSpawn);
+	}
+	else if (strcmp(classname, "team_round_timer") == 0)
+	{
+		SDKHook(entity, SDKHook_SpawnPost, OnTimerSpawned);
+	}
+}
+
+void OnTimerSpawned(int entity)
+{
+	char name[64];
+	GetEntPropString(entity, Prop_Data, "m_iName", name, sizeof(name));
+	
+	if (!StrEqual(name, "zs2_timer"))
+	{
+		DispatchKeyValue(entity, "auto_countdown", "0");
+	}
+}
+
+void OnCaptureSpawn(int entity)
+{
+	if (waitingForPlayers || timerRef != -1)
+	{
+		return;
+	}
+
+	int timer = CreateEntityByName("team_round_timer");
+	DispatchKeyValue(timer, "targetname", "zs2_timer");
+	DispatchKeyValue(timer, "setup_length", "13");
+	DispatchKeyValue(timer, "reset_time", "1");
+	DispatchKeyValue(timer, "auto_countdown", "1");
+	DispatchKeyValue(timer, "timer_length", "45");
+	DispatchSpawn(timer);
+
+	SetVariantString("OnSetupStart !self:ShowInHUD:1:0:-1");
+	AcceptEntityInput(timer, "AddOutput");
+	SetVariantString("OnSetupStart !self:Enable:0:0:-1");
+	AcceptEntityInput(timer, "AddOutput");
+	SetVariantString("OnSetupFinished !self:ShowInHUD:1:0:-1");
+	AcceptEntityInput(timer, "AddOutput");
+	SetVariantString("OnSetupFinished !self:Enable:0:0:-1");
+	AcceptEntityInput(timer, "AddOutput");
+
+	timerRef = EntIndexToEntRef(timer);
+	HookSingleEntityOutput(timer, "OnFinished", RoundTimerOnEnd);
 }
 
 public void OnConfigsExecuted()
@@ -268,14 +302,11 @@ public void TF2_OnWaitingForPlayersEnd()
 
 void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
+	DebugText("Event_RoundStart");
+
 	if (!waitingForPlayers)
 	{
 		setupTime = view_as<bool>(GameRules_GetProp("m_bInSetup"));
-		int ent = FindEntityByClassname(MaxClients+1, "team_round_timer"); 
-		if(ent != -1)
-		{
-			CreateTimer(0.5, SetSetup, ent, TIMER_FLAG_NO_MAPCHANGE); 
-		}
 
 		int playerCount = GetClientCount(true);
 		int ratio = gcv_ratio.IntValue;
@@ -334,6 +365,7 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 
 void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) 
 {
+	DebugText("Event_SetupFinished");
 	setupTime = false;
 
 	// Disable resupply lockers for survivors
@@ -342,12 +374,6 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 	{
 		SetVariantInt(TEAM_ZOMBIES);
 		AcceptEntityInput(ent, "SetTeam");
-	}
-	
-	ent = FindEntityByClassname(MaxClients+1, "team_round_timer"); 
-	if(ent != -1)
-	{
-		CreateTimer(0.5, SetRoundTime, ent, TIMER_FLAG_NO_MAPCHANGE); 
 	}
 
 	if (GetTeamClientCount(TEAM_SURVIVORS) == 0)
@@ -359,24 +385,11 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 
 void RoundTimerOnEnd(const char[] output, int caller, int activator, float delay)
 {
+	// TODO: Track other entities that can announce winning
 	int ent = FindEntityByClassname(-1, "team_control_point_master");
 	AcceptEntityInput(ent, "Enable");
 	SetVariantInt(TEAM_SURVIVORS);
 	AcceptEntityInput(ent, "SetWinner");
-}
-
-public Action SetSetup(Handle timer, any ent)
-{
-	SetVariantInt(13);
-	AcceptEntityInput(ent, "SetSetupTime");
-}
-
-public Action SetRoundTime(Handle timer, any ent)
-{
-	SetVariantInt(3600);
-	AcceptEntityInput(ent, "SetMaxTime");
-	SetVariantInt(20);
-	AcceptEntityInput(ent, "SetTime");
 }
 
 void VoteGamemod()
