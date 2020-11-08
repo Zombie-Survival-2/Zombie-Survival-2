@@ -65,7 +65,8 @@ bool setupTime,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
 
-int TEAM_SURVIVORS = 2,
+int timerRef,
+	TEAM_SURVIVORS = 2,
 	TEAM_ZOMBIES = 3,
 	queuePoints[MAXPLAYERS+1], 
 	damageDealt[MAXPLAYERS+1];	
@@ -155,12 +156,17 @@ public void OnMapStart() {
 	GetCurrentMap(mapName, sizeof(mapName));
 }
 
+public void OnMapEnd() {
+	int index = EntRefToEntIndex(timerRef);
+	UnhookSingleEntityOutput(index, "OnFinished", RoundTimerOnEnd);
+}
+
 public void OnEntityCreated(int entity, const char[] classname)
 {
 	if(strcmp(classname, "tf_logic_koth") == 0)
 	{
 		AcceptEntityInput(entity, "KillHierarchy");
-		
+
 		int timer = CreateEntityByName("team_round_timer");
 		DispatchKeyValue(timer, "targetname", "zs2_timer");
 		DispatchKeyValue(timer, "setup_length", "13");
@@ -182,6 +188,8 @@ public void OnEntityCreated(int entity, const char[] classname)
 		AcceptEntityInput(timer, "AddOutput");
 		SetVariantString("OnSetupFinished zs2_timer:Enable:0:0:-1");
 		AcceptEntityInput(timer, "AddOutput");
+		HookSingleEntityOutput(timer, "OnFinished", RoundTimerOnEnd);
+		timerRef = EntIndexToEntRef(timer);
 	}
 }
 
@@ -345,15 +353,16 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 	if (GetTeamClientCount(TEAM_SURVIVORS) == 0)
 	{
 		DebugText("No survivors, forcing a zombie team victory");
-		int entity = CreateEntityByName("game_round_win"); // i'd recommend using mp_forcewin rather than using an entity
-		if (IsValidEdict(entity)) {
-			DispatchSpawn(entity);
-			ActivateEntity(entity);
-			SetVariantInt(TEAM_ZOMBIES);
-			AcceptEntityInput(entity, "SetTeam");
-			AcceptEntityInput(entity, "RoundWin");
-		}
+		ForceWin(TEAM_ZOMBIES);
 	}
+}
+
+void RoundTimerOnEnd(const char[] output, int caller, int activator, float delay)
+{
+	int ent = FindEntityByClassname(-1, "team_control_point_master");
+	AcceptEntityInput(ent, "Enable");
+	SetVariantInt(TEAM_SURVIVORS);
+	AcceptEntityInput(ent, "SetWinner");
 }
 
 public Action SetSetup(Handle timer, any ent)
@@ -607,14 +616,7 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 				else if (survivorsLiving == 0)
 				{
 					DebugText("Forcing a zombie team victory");
-					int entity = CreateEntityByName("game_round_win");
-					if (IsValidEdict(entity)) {
-						DispatchSpawn(entity);
-						ActivateEntity(entity);
-						SetVariantInt(TEAM_ZOMBIES);
-						AcceptEntityInput(entity, "SetTeam");
-						AcceptEntityInput(entity, "RoundWin");
-					}
+					ForceWin(TEAM_ZOMBIES);
 				}
 				
 				RequestFrame(Zombie_Setup, victim);
@@ -887,6 +889,18 @@ bool IsAllowedClass(const TFClassType class)
 	}
 
 	return true;
+}
+
+void ForceWin(const int team)
+{
+	int entity = CreateEntityByName("game_round_win"); // i'd recommend using mp_forcewin rather than using an entity
+	if (IsValidEdict(entity)) {
+		DispatchSpawn(entity);
+		ActivateEntity(entity);
+		SetVariantInt(team);
+		AcceptEntityInput(entity, "SetTeam");
+		AcceptEntityInput(entity, "RoundWin");
+	}
 }
 
 /* Debug output
