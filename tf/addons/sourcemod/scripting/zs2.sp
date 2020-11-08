@@ -65,8 +65,7 @@ bool setupTime,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
 
-int timerEnt,
-	TEAM_SURVIVORS = 2,
+int TEAM_SURVIVORS = 2,
 	TEAM_ZOMBIES = 3,
 	queuePoints[MAXPLAYERS+1], 
 	damageDealt[MAXPLAYERS+1];	
@@ -154,14 +153,35 @@ public void OnMapStart() {
 	AddFileToDownloadsTable("sound/zs2/intro_st/darkcarnival.mp3");
 
 	GetCurrentMap(mapName, sizeof(mapName));
-	timerEnt = FindEntityByClassname(-1, "team_round_timer");
 }
 
 public void OnEntityCreated(int entity, const char[] classname)
 {
 	if(strcmp(classname, "tf_logic_koth") == 0)
 	{
-		AcceptEntityInput(entity, "Kill");
+		AcceptEntityInput(entity, "KillHierarchy");
+		
+		int timer = CreateEntityByName("team_round_timer");
+		DispatchKeyValue(timer, "targetname", "zs2_timer");
+		DispatchKeyValue(timer, "setup_length", "13");
+		DispatchKeyValue(timer, "reset_time", "1");
+		DispatchKeyValue(timer, "auto_countdown", "1");
+		DispatchKeyValue(timer, "timer_length", "20");
+		DispatchSpawn(timer);
+
+		SetVariantString("OnSetupStart zs2_timer:ShowInHUD:1:0:-1");
+		AcceptEntityInput(timer, "AddOutput");
+		SetVariantString("OnSetupStart zs2_timer:Resume:0:0:-1");
+		AcceptEntityInput(timer, "AddOutput");
+		SetVariantString("OnSetupStart zs2_timer:Enable:0:0:-1");
+		AcceptEntityInput(timer, "AddOutput");
+
+		SetVariantString("OnSetupFinished zs2_timer:ShowInHUD:1:0:-1");
+		AcceptEntityInput(timer, "AddOutput");
+		SetVariantString("OnSetupFinished zs2_timer:Resume:0:0:-1");
+		AcceptEntityInput(timer, "AddOutput");
+		SetVariantString("OnSetupFinished zs2_timer:Enable:0:0:-1");
+		AcceptEntityInput(timer, "AddOutput");
 	}
 }
 
@@ -242,29 +262,11 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
 	if (!waitingForPlayers)
 	{
-		timerEnt = FindEntityByClassname(-1, "team_round_timer");
-		setupTime = MAP_HAS_SETUP;
-		
-		if(timerEnt == -1)
+		setupTime = view_as<bool>(GameRules_GetProp("m_bInSetup"));
+		int ent = FindEntityByClassname(MaxClients+1, "team_round_timer"); 
+		if(ent != -1)
 		{
-			timerEnt = CreateEntityByName("team_round_timer");
-			DispatchSpawn(timerEnt);
-
-			SetVariantInt(1);
-			AcceptEntityInput(timerEnt, "ShowInHUD");
-
-			SetVariantInt(1);
-			AcceptEntityInput(timerEnt, "AutoCountdown", timerEnt);
-
-			AcceptEntityInput(timerEnt, "Enable");
-			AcceptEntityInput(timerEnt, "Resume");
-			DebugText("NO TIMER FOUND. CREATING ONE");
-		}
-		else 
-		{
-			SetVariantInt(13);
-			AcceptEntityInput(timerEnt, "SetTime");
-			DebugText("Timer Found, setting setup to 13 seconds");
+			CreateTimer(0.5, SetSetup, ent, TIMER_FLAG_NO_MAPCHANGE); 
 		}
 
 		int playerCount = GetClientCount(true);
@@ -313,8 +315,6 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 				Survival_RoundStart();
 		}
 
-		DebugText("setupTime = %i", setupTime ? 1 : 0);
-
 		if(!setupTime)
 		{
 			Event_SetupFinished(null, "teamplay_setup_finished", false);
@@ -327,17 +327,19 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) 
 {
 	setupTime = false;
-	timerEnt = FindEntityByClassname(-1, "team_round_timer");
-	SetVariantInt(600);
-	AcceptEntityInput(timerEnt, "SetTime");
-	DebugText("Timer is 600 NOW.");
-	
+
 	// Disable resupply lockers for survivors
 	int ent = -1;
 	while ((ent = FindEntityByClassname(ent, "func_regenerate")) != -1)
 	{
 		SetVariantInt(TEAM_ZOMBIES);
 		AcceptEntityInput(ent, "SetTeam");
+	}
+	
+	ent = FindEntityByClassname(MaxClients+1, "team_round_timer"); 
+	if(ent != -1)
+	{
+		CreateTimer(0.5, SetRoundTime, ent, TIMER_FLAG_NO_MAPCHANGE); 
 	}
 
 	if (GetTeamClientCount(TEAM_SURVIVORS) == 0)
@@ -352,6 +354,20 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 			AcceptEntityInput(entity, "RoundWin");
 		}
 	}
+}
+
+public Action SetSetup(Handle timer, any ent)
+{
+	SetVariantInt(13);
+	AcceptEntityInput(ent, "SetSetupTime");
+}
+
+public Action SetRoundTime(Handle timer, any ent)
+{
+	SetVariantInt(3600);
+	AcceptEntityInput(ent, "SetMaxTime");
+	SetVariantInt(20);
+	AcceptEntityInput(ent, "SetTime");
 }
 
 void VoteGamemod()
