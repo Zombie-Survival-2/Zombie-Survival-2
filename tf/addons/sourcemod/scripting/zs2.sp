@@ -69,7 +69,8 @@ bool timerExists,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
 
-int TEAM_SURVIVORS = 2,
+int timerRef = -1,
+	TEAM_SURVIVORS = 2,
 	TEAM_ZOMBIES = 3,
 	queuePoints[MAXPLAYERS+1], 
 	damageDealt[MAXPLAYERS+1];	
@@ -137,7 +138,8 @@ public void OnPluginStart()
 /* Map initialisation + server tags
 ==================================================================================================== */
 
-public void OnMapStart() {
+public void OnMapStart() 
+{
 	// Sounds precaching and downloading
 	PrecacheSound("zs2/death.mp3");
 	AddFileToDownloadsTable("sound/zs2/death.mp3");
@@ -158,7 +160,15 @@ public void OnMapStart() {
 	mapStarted = true;
 }
 
-public void OnMapEnd() {
+public void OnMapEnd() 
+{
+	if(timerRef != -1)
+	{
+		int timer = EntRefToEntIndex(timerRef);
+		UnhookSingleEntityOutput(timer, "OnFinished", RoundTimerOnEnd);
+		timerRef = -1;
+	}
+
 	mapStarted = false;
 }
 
@@ -219,6 +229,7 @@ void OnCaptureSpawn(int entity)
 	AcceptEntityInput(timer, "AddOutput");
 
 	HookSingleEntityOutput(timer, "OnFinished", RoundTimerOnEnd);
+	timerRef = EntIndexToEntRef(timer);
 	timerExists = true;
 }
 
@@ -391,11 +402,7 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 
 void RoundTimerOnEnd(const char[] output, int caller, int activator, float delay)
 {
-	// TODO: Track other entities that can announce winning
-	int ent = FindEntityByClassname(-1, "team_control_point_master");
-	AcceptEntityInput(ent, "Enable");
-	SetVariantInt(TEAM_SURVIVORS);
-	AcceptEntityInput(ent, "SetWinner");
+	ForceWin(TEAM_SURVIVORS);
 	timerExists = false;
 }
 
@@ -912,14 +919,15 @@ bool IsAllowedClass(const TFClassType class)
 
 void ForceWin(const int team)
 {
-	int entity = CreateEntityByName("game_round_win"); // i'd recommend using mp_forcewin rather than using an entity
-	if (IsValidEdict(entity)) {
-		DispatchSpawn(entity);
-		ActivateEntity(entity);
-		SetVariantInt(team);
-		AcceptEntityInput(entity, "SetTeam");
-		AcceptEntityInput(entity, "RoundWin");
+	int ent = FindEntityByClassname(-1, "team_control_point_master");
+	if (ent == -1)
+	{
+		ent = CreateEntityByName("team_control_point_master");
+		DispatchSpawn(ent);
+		AcceptEntityInput(ent, "Enable");
 	}
+	SetVariantInt(team);
+	AcceptEntityInput(ent, "SetWinner");
 }
 
 /* Debug output
