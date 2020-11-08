@@ -62,16 +62,14 @@ enum GameMod
 Handle g_hRoundTimer;
 GameMod gameMod = Game_Survival;
 
-char mapName[64];
-
-bool setupTime,
+bool mapStarted,
+	setupTime,
 	roundStarted,
 	waitingForPlayers,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
 
-int timerRef = -1,
-	TEAM_SURVIVORS = 2,
+int TEAM_SURVIVORS = 2,
 	TEAM_ZOMBIES = 3,
 	queuePoints[MAXPLAYERS+1], 
 	damageDealt[MAXPLAYERS+1];	
@@ -157,17 +155,11 @@ public void OnMapStart() {
 	AddFileToDownloadsTable("sound/zs2/intro_st/bloodharvest.mp3");
 	PrecacheSound("zs2/intro_st/darkcarnival.mp3");
 	AddFileToDownloadsTable("sound/zs2/intro_st/darkcarnival.mp3");
-
-	GetCurrentMap(mapName, sizeof(mapName));
+	mapStarted = true;
 }
 
 public void OnMapEnd() {
-	if(timerRef != -1) // Not sure we need this
-	{
-		int index = EntRefToEntIndex(timerRef);
-		UnhookSingleEntityOutput(index, "OnFinished", RoundTimerOnEnd);
-		timerRef = -1;
-	}
+	mapStarted = false;
 }
 
 public void OnEntityCreated(int entity, const char[] classname)
@@ -201,7 +193,7 @@ void OnTimerSpawned(int entity)
 
 void OnCaptureSpawn(int entity)
 {
-	if (waitingForPlayers || timerRef != -1)
+	if (!mapStarted || waitingForPlayers)
 	{
 		return;
 	}
@@ -223,7 +215,6 @@ void OnCaptureSpawn(int entity)
 	SetVariantString("OnSetupFinished !self:Enable:0:0:-1");
 	AcceptEntityInput(timer, "AddOutput");
 
-	timerRef = EntIndexToEntRef(timer);
 	HookSingleEntityOutput(timer, "OnFinished", RoundTimerOnEnd);
 }
 
@@ -338,10 +329,15 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 
 		for (int i = 1; i <= MaxClients; i++)
 		{
-			if (IsValidClient(i) && !selectedAsSurvivor[i])
+			if (IsValidClient(i))
 			{
-				Zombie_Setup(i);
-				CPrintToChat(i, "%s {haunted}You have been selected to become a {normal}Zombie.", MESSAGE_PREFIX);
+				if (!selectedAsSurvivor[i]) 
+				{
+					Zombie_Setup(i);
+					CPrintToChat(i, "%s {haunted}You have been selected to become a {normal}Zombie.", MESSAGE_PREFIX);
+				}
+
+				SetEntityMoveType(i, MOVETYPE_NONE);
 			}
 		}
 		
@@ -354,7 +350,7 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 				Survival_RoundStart();
 		}
 
-		if(!setupTime)
+		if (!setupTime)
 		{
 			Event_SetupFinished(null, "teamplay_setup_finished", false);
 		}
@@ -374,6 +370,14 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 	{
 		SetVariantInt(TEAM_ZOMBIES);
 		AcceptEntityInput(ent, "SetTeam");
+	}
+
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsValidClient(i))
+		{
+			SetEntityMoveType(i, MOVETYPE_WALK);
+		}
 	}
 
 	if (GetTeamClientCount(TEAM_SURVIVORS) == 0)
@@ -655,7 +659,7 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 	}
 	else if (setupTime)
 	{
-		if(team == TEAM_SURVIVORS)
+		if (team == TEAM_SURVIVORS)
 		{
 			RequestFrame(Survivor_Setup, victim);
 		}
