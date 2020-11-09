@@ -197,7 +197,7 @@ void OnTimerSpawned(int entity)
 	GetEntPropString(entity, Prop_Data, "m_iName", name, sizeof(name));
 	if (!StrEqual(name, "zs2_timer"))
 	{
-		DebugText("Stopped timer '%s'", name);
+		DebugText("Stopped timer %s", name);
 		DispatchKeyValue(entity, "auto_countdown", "0");
 	}
 }
@@ -361,7 +361,19 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 			if (IsValidClient(i) && !selectedAsSurvivor[i])
 			{
 				Zombie_Setup(i);
-				SetEntityMoveType(i, MOVETYPE_NONE);
+				JSON_Object serverdata = ReadScript(map);
+				if (serverdata != null)
+				{
+					DebugText("JSON file found, using specified freeze value");
+					bool boolval = serverdata.GetInt("freeze");
+					if (boolval)
+						SetEntityMoveType(i, MOVETYPE_NONE);
+					else
+						SetEntityMoveType(i, MOVETYPE_WALK);
+				}
+				else
+					SetEntityMoveType(i, MOVETYPE_NONE);
+				json_cleanup_and_delete(serverdata);
 				CPrintToChat(i, "%s {haunted}You have been selected to become a {normal}Zombie.", MESSAGE_PREFIX);
 			}
 		}
@@ -548,14 +560,17 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 
 Action Listener_JoinClass(int client, const char[] command, int args)
 {
-	char arg[16];
-	GetCmdArg(1, arg, sizeof(arg));
-
-	if (GetClientTeam(client) == TEAM_SURVIVORS && !IsAllowedClass(TF2_GetClass(arg)))
+	if (!waitingForPlayers)
 	{
-		// Placeholder sound
-		EmitSoundToClient(client, "zs2/death.mp3", client);
-		return Plugin_Handled;
+		char arg[16];
+		GetCmdArg(1, arg, sizeof(arg));
+
+		if (GetClientTeam(client) == TEAM_SURVIVORS && !IsAllowedClass(TF2_GetClass(arg)))
+		{
+			// Placeholder sound
+			EmitSoundToClient(client, "zs2/death.mp3", client);
+			return Plugin_Handled;
+		}
 	}
 
 	return Plugin_Continue;
@@ -613,6 +628,21 @@ Action Event_PlayerRegen(Event event, const char[] name, bool dontBroadcast)
 	{
 		OnlyMelee(player);
 		RemoveWearable(player);
+		if (setupTime)
+		{
+			JSON_Object serverdata = ReadScript(map);
+			if (serverdata != null)
+			{
+				DebugText("JSON file found, using specified freeze value");
+				bool boolval = serverdata.GetInt("freeze");
+				if (boolval)
+					SetEntityMoveType(i, MOVETYPE_NONE);
+				else
+					SetEntityMoveType(i, MOVETYPE_WALK);
+			}
+			else
+				SetEntityMoveType(i, MOVETYPE_NONE);
+		}
 	}
 
 	return Plugin_Continue;
