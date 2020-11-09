@@ -361,12 +361,13 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 			if (IsValidClient(i) && !selectedAsSurvivor[i])
 			{
 				Zombie_Setup(i);
+				char map[64];
+				GetCurrentMap(map, sizeof(map));
 				JSON_Object serverdata = ReadScript(map);
 				if (serverdata != null)
 				{
 					DebugText("JSON file found, using specified freeze value");
-					bool boolval = serverdata.GetInt("freeze");
-					if (boolval)
+					if (serverdata.GetBool("freeze"))
 						SetEntityMoveType(i, MOVETYPE_NONE);
 					else
 						SetEntityMoveType(i, MOVETYPE_WALK);
@@ -434,17 +435,57 @@ void RoundTimerOnEnd(const char[] output, int caller, int activator, float delay
 
 void VoteGamemod()
 {
-	// Create vote during round end
-	NativeVote vote = new NativeVote(GameVote, NativeVotesType_Custom_Mult);
-	vote.Initiator = NATIVEVOTES_SERVER_INDEX;
-	vote.SetDetails("Select next round type:");
-	char info[2];
-	for (int i = 0; i < 2; i++)
+	// Determine round types allowed for current map
+	ArrayList allowedGamemods = CreateArray(32, 2);
+	char map[64];
+	GetCurrentMap(map, sizeof(map));
+	JSON_Object serverdata = ReadScript(map);
+	if (serverdata != null)
 	{
-		IntToString(i, info, sizeof(info));
-		vote.AddItem(info, gamemods[i]);
+		// Needs a more dynamic approach, potentially using an ArrayList
+		DebugText("JSON file found, using specified round types");
+		if (serverdata.GetInt("cp_d"))
+			PushArrayString(allowedGamemods, "Defend");
+		if (serverdata.GetInt("st_s"))
+			PushArrayString(allowedGamemods, "Survival");
 	}
-	vote.DisplayVoteToAll(13);
+	else
+	{
+		DebugText("No JSON file found, allowing all round types");
+		for (int i = 0; i < sizeof(gamemods); i++)
+			PushArrayString(allowedGamemods, gamemods[i]);
+	}
+	json_cleanup_and_delete(serverdata);
+	// Force only round type available
+	if (GetArraySize(allowedGamemods) <= 1)
+	{
+		DebugText("Only one round type available, forcing");
+		if (GetArraySize(allowedGamemods) == 1)
+		{
+			char strval[32];
+			GetArrayString(allowedGamemods, 0, strval, sizeof(strval));
+			if (StrEqual(strval, "Defend"))
+				gameMod = Game_Defend;
+			else
+				gameMod = Game_Survival;
+		}
+		else
+			gameMod = Game_Survival;
+	}
+	// Use a vote if there are more round types to choose from
+	else
+	{
+		NativeVote vote = new NativeVote(GameVote, NativeVotesType_Custom_Mult);
+		vote.Initiator = NATIVEVOTES_SERVER_INDEX;
+		vote.SetDetails("Select next round type:");
+		char info[2];
+		for (int i = 0; i < 2; i++)
+		{
+			IntToString(i, info, sizeof(info));
+			vote.AddItem(info, gamemods[i]);
+		}
+		vote.DisplayVoteToAll(13);
+	}
 }
 
 // https://forums.alliedmods.net/showpost.php?p=2694813&postcount=260
@@ -630,18 +671,19 @@ Action Event_PlayerRegen(Event event, const char[] name, bool dontBroadcast)
 		RemoveWearable(player);
 		if (setupTime)
 		{
+			char map[64];
+			GetCurrentMap(map, sizeof(map));
 			JSON_Object serverdata = ReadScript(map);
 			if (serverdata != null)
 			{
 				DebugText("JSON file found, using specified freeze value");
-				bool boolval = serverdata.GetInt("freeze");
-				if (boolval)
-					SetEntityMoveType(i, MOVETYPE_NONE);
+				if (serverdata.GetBool("freeze"))
+					SetEntityMoveType(player, MOVETYPE_NONE);
 				else
-					SetEntityMoveType(i, MOVETYPE_WALK);
+					SetEntityMoveType(player, MOVETYPE_WALK);
 			}
 			else
-				SetEntityMoveType(i, MOVETYPE_NONE);
+				SetEntityMoveType(player, MOVETYPE_NONE);
 		}
 	}
 
