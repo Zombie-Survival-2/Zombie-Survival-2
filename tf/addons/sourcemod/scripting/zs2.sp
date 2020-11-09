@@ -24,7 +24,6 @@
 #define PLUGIN_VERSION "0.1 Beta"
 #define MOTD_VERSION "0.1"
 #define IsValidClient(%1) (1 <= %1 <= MaxClients && IsClientInGame(%1))
-#define MAP_IS_ARENA (StrContains(mapName, "arena_") == 0)
 
 // Plugin information
 public Plugin myinfo = {
@@ -206,7 +205,6 @@ public void OnEntityCreated(int entity, const char[] classname)
 	// Kill KOTH/Arena entity hierarchy
 	if (strcmp(classname, "tf_logic_koth") == 0 || strcmp(classname, "tf_logic_arena") == 0)
 	{
-		if(strcmp(classname, "tf_logic_arena") == 0) SDKHook(entity, SDKHook_SpawnPost, OnArenaSpawn);
 		AcceptEntityInput(entity, "KillHierarchy");
 	}
 	// Immediately fire event for round timer
@@ -276,27 +274,15 @@ void OnCaptureSpawn(int entity)
 	AcceptEntityInput(timer, "AddOutput");
 	SetVariantString("OnSetupStart !self:Enable:0:0:-1");
 	AcceptEntityInput(timer, "AddOutput");
-	if(!MAP_IS_ARENA)
-	{
-		SetVariantString("OnSetupFinished !self:ShowInHUD:1:0:-1");
-		AcceptEntityInput(timer, "AddOutput");
-		SetVariantString("OnSetupFinished !self:Enable:0:0:-1");
-		AcceptEntityInput(timer, "AddOutput");
-	}
+	SetVariantString("OnSetupFinished !self:ShowInHUD:1:0:-1");
+	AcceptEntityInput(timer, "AddOutput");
+	SetVariantString("OnSetupFinished !self:Enable:0:0:-1");
+	AcceptEntityInput(timer, "AddOutput");
 	// Announce win (required since we stop the round timers)
 	HookSingleEntityOutput(timer, "OnFinished", RoundTimerOnEnd);
 	timerRef = EntIndexToEntRef(timer);
 	
 	timerExists = true;
-}
-
-void OnArenaSpawn(int entity)
-{
-	SetVariantString("OnArenaRoundStart zs2_timer:ShowInHUD:1:0:-1");
-	AcceptEntityInput(entity, "AddOutput");
-	
-	SetVariantString("OnArenaRoundStart z2_timer:Enable:0:0:-1");
-	AcceptEntityInput(entity, "AddOutput");
 }
 
 public void OnConfigsExecuted()
@@ -484,8 +470,6 @@ void RoundTimerOnEnd(const char[] output, int caller, int activator, float delay
 		case Game_Survival:
 			ForceWin(TEAM_SURVIVORS);
 	}
-	
-	timerExists = false;
 }
 
 void VoteGamemod()
@@ -1062,6 +1046,7 @@ void ForceWin(const int team)
 	}
 	SetVariantInt(team);
 	AcceptEntityInput(ent, "SetWinner");
+	timerExists = false;
 }
 
 /* Debug output
