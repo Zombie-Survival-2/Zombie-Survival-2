@@ -1,7 +1,7 @@
 {
 	"t_setup": 30,
 	"t_round": 390,
-	"freeze": true,
+	"donotfreeze": false,
 
 	"cp_d": true,
 	"cp_intro": "zs2/intro_cp/crashcourse.mp3",

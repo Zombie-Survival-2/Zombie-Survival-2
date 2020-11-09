@@ -17,20 +17,14 @@ public void Defend_RoundStart()
 
 void CP_IntroMusic()
 {
-	char map[64];
-	GetCurrentMap(map, sizeof(map));
-	JSON_Object serverdata = ReadScript(map);
-	if (serverdata != null)
+	if (introCP != "")
 	{
-		char strval[64];
-		serverdata.GetString("cp_intro", strval, sizeof(strval));
 		for (int i = 1; i <= MaxClients; i++)
 		{
 			if (IsValidClient(i))
-				EmitSoundToClient(i, strval, i);
+				EmitSoundToClient(i, introCP, i);
 		}
 	}
-	json_cleanup_and_delete(serverdata);
 }
 
 void CP_EnableObjectives()

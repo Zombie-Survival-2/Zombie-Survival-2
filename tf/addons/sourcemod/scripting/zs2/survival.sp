@@ -17,20 +17,14 @@ public void Survival_RoundStart()
 
 void ST_IntroMusic()
 {
-	char map[64];
-	GetCurrentMap(map, sizeof(map));
-	JSON_Object serverdata = ReadScript(map);
-	if (serverdata != null)
+	if (introST != "")
 	{
-		char strval[64];
-		serverdata.GetString("st_intro", strval, sizeof(strval));
 		for (int i = 1; i <= MaxClients; i++)
 		{
 			if (IsValidClient(i))
-				EmitSoundToClient(i, strval, i);
+				EmitSoundToClient(i, introST, i);
 		}
 	}
-	json_cleanup_and_delete(serverdata);
 }
 
 void ST_DisableObjectives()
