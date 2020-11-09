@@ -30,17 +30,16 @@ void ST_IntroMusic()
 				EmitSoundToClient(i, strval, i);
 		}
 	}
+	json_cleanup_and_delete(serverdata);
 }
 
 void ST_DisableObjectives()
 {
 	int ent = -1;
 	
-	for (int i = 0; i < 5; i++)
+	for (int i = 0; i < sizeof(captures); i++)
 	{
 		while ((ent = FindEntityByClassname(ent, captures[i])) != -1)
-		{
 			AcceptEntityInput(ent, "Disable");
-		}
 	}
 }

@@ -34,7 +34,6 @@ public Plugin myinfo = {
 };
 
 // Variables
-
 public const char gamemods[2][] = {
 	// "Attack",
 	"Defend",
@@ -42,14 +41,6 @@ public const char gamemods[2][] = {
 	// "Waves",
 	// "Scavenge"
 };
-public const char captures[5][32] = { 
-	"team_control_point_master", 
-	"team_control_point", 
-	"trigger_capture_area", 
-	"item_teamflag", 
-	"func_capturezone" 
-};
-
 enum GameMod
 {
 	// Game_Attack,
@@ -58,9 +49,13 @@ enum GameMod
 	// Game_Waves,
 	// Game_Scavenge
 };
-
-GameMod gameMod = Game_Survival;
-
+public const char captures[5][32] = {
+	"team_control_point_master",
+	"team_control_point",
+	"trigger_capture_area",
+	"item_teamflag",
+	"func_capturezone"
+};
 bool timerExists,
 	mapStarted,
 	setupTime,
@@ -68,12 +63,12 @@ bool timerExists,
 	waitingForPlayers,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
-
 int timerRef = -1,
 	TEAM_SURVIVORS = 2,
 	TEAM_ZOMBIES = 3,
-	queuePoints[MAXPLAYERS+1], 
-	damageDealt[MAXPLAYERS+1];	
+	queuePoints[MAXPLAYERS+1],
+	damageDealt[MAXPLAYERS+1];
+GameMod gameMod = Game_Survival;
 
 // ConVars
 ConVar gcv_debug,
@@ -84,9 +79,8 @@ ConVar gcv_debug,
 	gcv_playtimepoints,
 	gcv_killpoints,
 	gcv_assistpoints;
-	
-// Method includes
 
+// Method includes
 #include "zs2/defend.sp"
 #include "zs2/survival.sp"
 
@@ -96,13 +90,13 @@ ConVar gcv_debug,
 public void OnPluginStart()
 {
 	// Events
+	HookEvent("player_death", Event_OnDeath);
+	HookEvent("player_spawn", Event_OnSpawn);
+	HookEvent("post_inventory_application", Event_PlayerRegen);
 	HookEvent("teamplay_broadcast_audio", Event_Audio, EventHookMode_Pre);
 	HookEvent("teamplay_round_start", Event_RoundStart);
 	HookEvent("teamplay_round_win", Event_RoundEnd);
 	HookEvent("teamplay_setup_finished", Event_SetupFinished);
-	HookEvent("player_death", Event_OnDeath);
-	HookEvent("player_spawn", Event_OnSpawn);
-	HookEvent("post_inventory_application", Event_PlayerRegen);
 
 	// ConVars
 	gcv_debug = CreateConVar("sm_zs2_debug", "1", "Disables or enables debug messages in chat, set to 0 as default before release.");
@@ -127,9 +121,9 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_zs2_reset", Command_Reset);
 
 	// Listeners
-	AddCommandListener(Listener_JoinTeam, "jointeam");
-	AddCommandListener(Listener_JoinClass, "joinclass");
 	AddCommandListener(Listener_Build, "build");
+	AddCommandListener(Listener_JoinClass, "joinclass");
+	AddCommandListener(Listener_JoinTeam, "jointeam");
 
 	// Translations
 	LoadTranslations("common.phrases");
@@ -157,36 +151,43 @@ public void OnMapStart()
 	AddFileToDownloadsTable("sound/zs2/intro_st/bloodharvest.mp3");
 	PrecacheSound("zs2/intro_st/darkcarnival.mp3");
 	AddFileToDownloadsTable("sound/zs2/intro_st/darkcarnival.mp3");
+	
 	mapStarted = true;
 }
 
-public void OnMapEnd() 
+public void OnMapEnd()
 {
-	if(timerRef != -1)
+	// What is the purpose of this? Shouldn't it be on round end?
+	if (timerRef != -1)
 	{
 		int timer = EntRefToEntIndex(timerRef);
 		UnhookSingleEntityOutput(timer, "OnFinished", RoundTimerOnEnd);
 		timerRef = -1;
 	}
-
+	
 	mapStarted = false;
 }
 
 public void OnEntityCreated(int entity, const char[] classname)
 {
+	// Kill KOTH entity hierarchy
 	if (strcmp(classname, "tf_logic_koth") == 0)
 	{
 		AcceptEntityInput(entity, "KillHierarchy");
 	}
-	else if (strcmp(classname, captures[0]) == 0 || strcmp(classname, captures[1]) == 0 ||
-			strcmp(classname, captures[2]) == 0 || strcmp(classname, captures[3]) == 0 ||
-			strcmp(classname, captures[4]) == 0)
-	{
-		SDKHook(entity, SDKHook_SpawnPost, OnCaptureSpawn);
-	}
+	// Immediately fire event for round timer
 	else if (strcmp(classname, "team_round_timer") == 0)
 	{
 		SDKHook(entity, SDKHook_SpawnPost, OnTimerSpawned);
+	}
+	// Immediately fire event for objectives
+	else
+	{
+		for (int i = 0, i < sizeof(captures); i++)
+		{
+			if (strcmp(classname, captures[i]) == 0)
+				SDKHook(entity, SDKHook_SpawnPost, OnCaptureSpawn);
+		}
 	}
 }
 
@@ -194,10 +195,9 @@ void OnTimerSpawned(int entity)
 {
 	char name[64];
 	GetEntPropString(entity, Prop_Data, "m_iName", name, sizeof(name));
-	
 	if (!StrEqual(name, "zs2_timer"))
 	{
-		DebugText("Killed timer '%s'", name);
+		DebugText("Stopped timer '%s'", name);
 		DispatchKeyValue(entity, "auto_countdown", "0");
 	}
 }
@@ -205,36 +205,55 @@ void OnTimerSpawned(int entity)
 void OnCaptureSpawn(int entity)
 {
 	if (!mapStarted || waitingForPlayers || timerExists)
-	{
 		return;
-	}
 
-	DebugText("Created TIMER");
-
+	// Create plugin round timer
 	int timer = CreateEntityByName("team_round_timer");
 	DispatchKeyValue(timer, "targetname", "zs2_timer");
-	DispatchKeyValue(timer, "setup_length", "13");
+	char map[64];
+	GetCurrentMap(map, sizeof(map));
+	JSON_Object serverdata = ReadScript(map);
+	if (serverdata != null)
+	{
+		DebugText("JSON file found, using specified time values");
+		char strval[64];
+		int intval = serverdata.GetInt("t_setup");
+		IntToString(intval, strval, sizeof(strval));
+		DispatchKeyValue(timer, "setup_length", strval);
+		intval = serverdata.GetInt("t_round");
+		IntToString(intval, strval, sizeof(strval));
+		DispatchKeyValue(timer, "timer_length", strval);
+	}
+	else
+	{
+		DebugText("No JSON file found, using default time values");
+		DispatchKeyValue(timer, "setup_length", "30");
+		DispatchKeyValue(timer, "timer_length", "300");
+	}
+	json_cleanup_and_delete(serverdata);
 	DispatchKeyValue(timer, "reset_time", "1");
 	DispatchKeyValue(timer, "auto_countdown", "1");
-	DispatchKeyValue(timer, "timer_length", "45");
 	DispatchSpawn(timer);
-
+	// Show plugin round timer in HUD
 	SetVariantString("OnSetupStart !self:ShowInHUD:1:0:-1");
 	AcceptEntityInput(timer, "AddOutput");
 	SetVariantString("OnSetupStart !self:Enable:0:0:-1");
 	AcceptEntityInput(timer, "AddOutput");
+	// Not sure that this is necessary
 	SetVariantString("OnSetupFinished !self:ShowInHUD:1:0:-1");
 	AcceptEntityInput(timer, "AddOutput");
 	SetVariantString("OnSetupFinished !self:Enable:0:0:-1");
 	AcceptEntityInput(timer, "AddOutput");
-
+	// What is the purpose of this?
 	HookSingleEntityOutput(timer, "OnFinished", RoundTimerOnEnd);
 	timerRef = EntIndexToEntRef(timer);
+	
 	timerExists = true;
 }
 
 public void OnConfigsExecuted()
 {
+	// Server tags
 	InsertServerTag("zombies");
 	InsertServerTag("zombie survival 2");
 	InsertServerTag("zs2");
@@ -246,7 +265,6 @@ public void OnConfigsExecuted()
 void InsertServerTag(const char[] insertThisTag) 
 {
 	ConVar tags = FindConVar("sv_tags");
-
 	if (tags != null) 
 	{
 		char serverTags[256];
@@ -274,7 +292,6 @@ public void OnClientPutInServer(int client)
 {
 	firstConnection[client] = true;
 	SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
-	CreateTimer(5.0, Timer_DisplayIntro, client);
 }
 
 public void OnClientDisconnect(int client)
@@ -310,8 +327,8 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
 	if (!waitingForPlayers)
 	{
-		setupTime = view_as<bool>(GameRules_GetProp("m_bInSetup"));
-
+		setupTime = true;
+		// Determine required number of survivors
 		int playerCount = GetClientCount(true);
 		int ratio = gcv_ratio.IntValue;
 		if (ratio > 32 || ratio < 1)
@@ -320,12 +337,11 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 		if (maxsurvivors > 32 || maxsurvivors < 1)
 			maxsurvivors = 6;
 		int required;
-		
 		if (playerCount <= ratio * (maxsurvivors - ratio))
 			required = RoundToCeil(float(playerCount) / float(ratio));
 		else
 			required = maxsurvivors;
-
+		// Populate survivor team, will need to be fired for the zombie team during setup time if someone disconnects
 		for (int i = 0; i < required; i++)
 		{
 			int player = GetClientWithMostQueuePoints(selectedAsSurvivor);
@@ -339,21 +355,16 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 			Survivor_Setup(player);
 			CPrintToChat(player, "%s {haunted}You have been selected to become a {normal}Survivor.", MESSAGE_PREFIX);
 		}
-
+		// Notify players of their selected team and alter their loadout and movement if necessary
 		for (int i = 1; i <= MaxClients; i++)
 		{
-			if (IsValidClient(i))
+			if (IsValidClient(i) && !selectedAsSurvivor[i])
 			{
-				if (!selectedAsSurvivor[i]) 
-				{
-					Zombie_Setup(i);
-					CPrintToChat(i, "%s {haunted}You have been selected to become a {normal}Zombie.", MESSAGE_PREFIX);
-				}
-
+				Zombie_Setup(i);
 				SetEntityMoveType(i, MOVETYPE_NONE);
+				CPrintToChat(i, "%s {haunted}You have been selected to become a {normal}Zombie.", MESSAGE_PREFIX);
 			}
 		}
-		
 		// Dynamically call methods based on current mode
 		switch (gameMod)
 		{
@@ -363,28 +374,23 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 				Survival_RoundStart();
 		}
 
-		if (!setupTime)
-		{
-			Event_SetupFinished(null, "teamplay_setup_finished", false);
-		}
-
 		roundStarted = true;
 	}
 }
 
 void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) 
 {
-	DebugText("Event_SetupFinished");
+	DebugText("Setup time finished");
 	setupTime = false;
 
-	// Disable resupply lockers for survivors
+	// Force resupply lockers to only work for zombies
 	int ent = -1;
 	while ((ent = FindEntityByClassname(ent, "func_regenerate")) != -1)
 	{
 		SetVariantInt(TEAM_ZOMBIES);
 		AcceptEntityInput(ent, "SetTeam");
 	}
-
+	// Allow all players to move again
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (IsValidClient(i))
@@ -392,7 +398,7 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 			SetEntityMoveType(i, MOVETYPE_WALK);
 		}
 	}
-
+	// Check if there are no survivors
 	if (GetTeamClientCount(TEAM_SURVIVORS) == 0)
 	{
 		DebugText("No survivors, forcing a zombie team victory");
@@ -402,23 +408,30 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 
 void RoundTimerOnEnd(const char[] output, int caller, int activator, float delay)
 {
-	ForceWin(TEAM_SURVIVORS);
+	// Dynamically call victories based on current mode
+	switch (gameMod)
+	{
+		case Game_Defend:
+			ForceWin(TEAM_SURVIVORS);
+		case Game_Survival:
+			ForceWin(TEAM_SURVIVORS);
+	}
+	
 	timerExists = false;
 }
 
 void VoteGamemod()
 {
+	// Create vote during round end
 	NativeVote vote = new NativeVote(GameVote, NativeVotesType_Custom_Mult);
 	vote.Initiator = NATIVEVOTES_SERVER_INDEX;
 	vote.SetDetails("Select next round type:");
 	char info[2];
-
 	for (int i = 0; i < 2; i++)
 	{
 		IntToString(i, info, sizeof(info));
 		vote.AddItem(info, gamemods[i]);
 	}
-
 	vote.DisplayVoteToAll(13);
 }
 
@@ -450,7 +463,7 @@ public int GameVote(NativeVote vote, MenuAction action, int param1, int param2)
 			int i = StringToInt(info);
 			int votes, totalVotes;
 			NativeVotes_GetInfo(param2, votes, totalVotes);
-			vote.DisplayPassCustom("The next round type will be %s (%d/%d).", gamemods[i], votes, totalVotes);
+			vote.DisplayPassCustom("Round type set to %s", gamemods[i], votes, totalVotes);
 			CPrintToChatAll("%s {haunted}The next round type will be {normal}%s {haunted}(%d/%d).", MESSAGE_PREFIX, gamemods[i], votes, totalVotes);
 			gameMod = view_as<GameMod>(i);
 		}
@@ -516,13 +529,16 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 	char arg[8];
 	GetCmdArg(1, arg, sizeof(arg));
 
-	if (!CheckCommandAccess(client, "", ADMFLAG_KICK) && StrContains(arg, "spec", false) > -1)
+	if (!CheckCommandAccess(client, "", ADMFLAG_KICK)
 	{
-		return Plugin_Handled;
+		// Need to allow admins to switch to the zombie team and the spectator team
+		if (StrContains(arg, "spec", false) > -1)
+			return Plugin_Handled;
 	}
 
 	if (firstConnection[client])
 	{
+		CreateTimer(3.0, Timer_DisplayIntro, client);
 		firstConnection[client] = false;
 		return Plugin_Continue;
 	}
@@ -537,7 +553,8 @@ Action Listener_JoinClass(int client, const char[] command, int args)
 
 	if (GetClientTeam(client) == TEAM_SURVIVORS && !IsAllowedClass(TF2_GetClass(arg)))
 	{
-		EmitSoundToClient(client, "zs2/death.mp3", client); // Placeholder sound
+		// Placeholder sound
+		EmitSoundToClient(client, "zs2/death.mp3", client);
 		return Plugin_Handled;
 	}
 
@@ -549,10 +566,9 @@ Action Listener_Build(int client, const char[] command, int args)
 	char arg[2];
 	GetCmdArg(1, arg, sizeof(arg));
 
-	if (client && GetClientTeam(client) == TEAM_ZOMBIES && strcmp(arg, "1") != 0) // 1 = entrance and exit teleporters
-	{
+	// Block everything except teleporters (1)
+	if (client && GetClientTeam(client) == TEAM_ZOMBIES && strcmp(arg, "1") != 0)
 		return Plugin_Handled;
-	}
 
 	return Plugin_Continue;
 }
@@ -635,6 +651,7 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 					DebugText("Playing one left music");
 					for (int i = 1; i <= MaxClients; i++)
 					{
+						// Need a way to stop this sound when the round is over
 						if (IsValidClient(i))
 							EmitSoundToClient(i, "zs2/oneleft.mp3", i);
 					}
@@ -808,7 +825,7 @@ public Action Command_Reset(int client, int args)
 		{
 			for (int i = 0; i < MaxClients; i++)
 				queuePoints[i] = 0;
-			DebugText("All queue points reset to 0.");
+			DebugText("All queue points reset to 0");
 		}
 		else
 			PrintToServer("%s This command is too destructive to be run outside of debug mode.", MESSAGE_PREFIX_NO_COLOR);

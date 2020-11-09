@@ -1,7 +1,7 @@
 public void Defend_RoundStart()
 {
 	CP_IntroMusic();
-	ST_EnableObjectives();
+	CP_EnableObjectives();
 	gameMod = Game_Defend;
 	for (int i = 1; i <= MaxClients; i++)
 	{
@@ -30,17 +30,16 @@ void CP_IntroMusic()
 				EmitSoundToClient(i, strval, i);
 		}
 	}
+	json_cleanup_and_delete(serverdata);
 }
 
-void ST_EnableObjectives()
+void CP_EnableObjectives()
 {
 	int ent = -1;
 	
-	for (int i = 0; i < 5; i++)
+	for (int i = 0; i < sizeof(captures); i++)
 	{
 		while ((ent = FindEntityByClassname(ent, captures[i])) != -1)
-		{
 			AcceptEntityInput(ent, "Enable");
-		}
 	}
 }
