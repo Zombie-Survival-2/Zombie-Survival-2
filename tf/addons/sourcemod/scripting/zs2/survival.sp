@@ -17,7 +17,7 @@ public void Survival_RoundStart()
 
 void ST_IntroMusic()
 {
-	if (introST != "")
+	if (!StrEqual(introST, ""))
 	{
 		for (int i = 1; i <= MaxClients; i++)
 		{

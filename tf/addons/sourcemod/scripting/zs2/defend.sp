@@ -17,7 +17,7 @@ public void Defend_RoundStart()
 
 void CP_IntroMusic()
 {
-	if (introCP != "")
+	if (!StrEqual(introCP, ""))
 	{
 		for (int i = 1; i <= MaxClients; i++)
 		{
