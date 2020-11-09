@@ -183,7 +183,7 @@ public void OnEntityCreated(int entity, const char[] classname)
 	// Immediately fire event for objectives
 	else
 	{
-		for (int i = 0, i < sizeof(captures); i++)
+		for (int i = 0; i < sizeof(captures); i++)
 		{
 			if (strcmp(classname, captures[i]) == 0)
 				SDKHook(entity, SDKHook_SpawnPost, OnCaptureSpawn);
@@ -529,7 +529,7 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 	char arg[8];
 	GetCmdArg(1, arg, sizeof(arg));
 
-	if (!CheckCommandAccess(client, "", ADMFLAG_KICK)
+	if (!CheckCommandAccess(client, "", ADMFLAG_KICK))
 	{
 		// Need to allow admins to switch to the zombie team and the spectator team
 		if (StrContains(arg, "spec", false) > -1)
