@@ -75,8 +75,8 @@ GameMod gameMod = Game_Survival;
 bool freezeInSetup;
 int roundDuration,
 	setupDuration;
-char introCP[64] = "";
-char introST[64] = "";
+char introCP[64],
+	introST[64];
 ArrayList allowedGamemods;
 
 // ConVars
