@@ -147,10 +147,28 @@ public void OnMapStart()
 	AddFileToDownloadsTable("sound/zs2/intro_cp/bloodharvest.mp3");
 	PrecacheSound("zs2/intro_cp/crashcourse.mp3");
 	AddFileToDownloadsTable("sound/zs2/intro_cp/crashcourse.mp3");
+	PrecacheSound("zs2/intro_cp/deadair.mp3");
+	AddFileToDownloadsTable("sound/zs2/intro_cp/deadair.mp3");
+	PrecacheSound("zs2/intro_cp/deathtoll.mp3");
+	AddFileToDownloadsTable("sound/zs2/intro_cp/deathtoll.mp3");
+	PrecacheSound("zs2/intro_cp/nomercy.mp3");
+	AddFileToDownloadsTable("sound/zs2/intro_cp/nomercy.mp3");
 	PrecacheSound("zs2/intro_st/bloodharvest.mp3");
 	AddFileToDownloadsTable("sound/zs2/intro_st/bloodharvest.mp3");
+	PrecacheSound("zs2/intro_st/crashcourse.mp3");
+	AddFileToDownloadsTable("sound/zs2/intro_st/crashcourse.mp3");
 	PrecacheSound("zs2/intro_st/darkcarnival.mp3");
 	AddFileToDownloadsTable("sound/zs2/intro_st/darkcarnival.mp3");
+	PrecacheSound("zs2/intro_st/deadair.mp3");
+	AddFileToDownloadsTable("sound/zs2/intro_st/deadair.mp3");
+	PrecacheSound("zs2/intro_st/deathtoll.mp3");
+	AddFileToDownloadsTable("sound/zs2/intro_st/deathtoll.mp3");
+	PrecacheSound("zs2/intro_st/hardrain.mp3");
+	AddFileToDownloadsTable("sound/zs2/intro_st/hardrain.mp3");
+	PrecacheSound("zs2/intro_st/nomercy.mp3");
+	AddFileToDownloadsTable("sound/zs2/intro_st/nomercy.mp3");
+	PrecacheSound("zs2/intro_st/swampfever.mp3");
+	AddFileToDownloadsTable("sound/zs2/intro_st/swampfever.mp3");
 	
 	mapStarted = true;
 }
