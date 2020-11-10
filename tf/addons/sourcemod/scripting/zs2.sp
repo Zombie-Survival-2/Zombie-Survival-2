@@ -57,15 +57,13 @@ public const char captures[5][32] = {
 	"item_teamflag",
 	"func_capturezone"
 };
-bool timerExists,
-	mapStarted,
+bool mapStarted,
 	setupTime,
 	roundStarted,
 	waitingForPlayers,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
-int timerRef = -1,
-	TEAM_SURVIVORS = 2,
+int TEAM_SURVIVORS = 2,
 	TEAM_ZOMBIES = 3,
 	queuePoints[MAXPLAYERS+1],
 	damageDealt[MAXPLAYERS+1];
@@ -237,37 +235,17 @@ public void OnMapStart()
 
 public void OnMapEnd()
 {
-	// What is the purpose of this? Shouldn't it be on round end?
-	if (timerRef != -1)
-	{
-		int timer = EntRefToEntIndex(timerRef);
-		UnhookSingleEntityOutput(timer, "OnFinished", RoundTimerOnEnd);
-		timerRef = -1;
-	}
-	
 	mapStarted = false;
 }
 
 public void OnEntityCreated(int entity, const char[] classname)
 {
-	// Kill KOTH/Arena entity hierarchy
 	if (strcmp(classname, "tf_logic_koth") == 0 || strcmp(classname, "tf_logic_arena") == 0)
 		AcceptEntityInput(entity, "KillHierarchy");
-	// Immediately fire event for round timer
 	else if (strcmp(classname, "team_round_timer") == 0)
 		SDKHook(entity, SDKHook_SpawnPost, OnTimerSpawned);
-	// Immediately fire event for objectives
-	else
-	{
-		for (int i = 0; i < sizeof(captures); i++)
-		{
-			if (strcmp(classname, captures[i]) == 0)
-			{
-				DebugText("Capturable entity %s found", captures[i]);
-				SDKHook(entity, SDKHook_SpawnPost, OnCaptureSpawn);
-			}
-		}
-	}
+	else if(strcmp(classname, "team_control_point_master") == 0)
+		SDKHook(entity, SDKHook_SpawnPost, OnCaptureSpawn);
 }
 
 void OnTimerSpawned(int entity)
@@ -283,7 +261,7 @@ void OnTimerSpawned(int entity)
 
 void OnCaptureSpawn(int entity)
 {
-	if (!mapStarted || waitingForPlayers || timerExists)
+	if (!mapStarted || waitingForPlayers)
 		return;
 
 	// Create plugin round timer
@@ -309,10 +287,7 @@ void OnCaptureSpawn(int entity)
 	AcceptEntityInput(timer, "AddOutput");
 	
 	// Hook win announcement, required since normal round timer has stopped
-	HookSingleEntityOutput(timer, "OnFinished", RoundTimerOnEnd);
-	timerRef = EntIndexToEntRef(timer);
-	
-	timerExists = true;
+	HookSingleEntityOutput(timer, "OnFinished", RoundTimerOnEnd, true);
 }
 
 public void OnConfigsExecuted()
@@ -999,7 +974,6 @@ void ForceWin(const int team)
 	}
 	SetVariantInt(team);
 	AcceptEntityInput(ent, "SetWinner");
-	timerExists = false;
 }
 
 /* Debug output
