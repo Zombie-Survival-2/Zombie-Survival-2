@@ -375,8 +375,9 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 		int maxsurvivors = gcv_maxsurvivors.IntValue;
 		if (maxsurvivors > 32 || maxsurvivors < 1)
 			maxsurvivors = 6;
+		// Set up required survivors, do not let it exceed the maximum value
 		int required;
-		if (playerCount <= ratio * (maxsurvivors - ratio))
+		if (playerCount <= ratio * maxsurvivors - ratio)
 			required = RoundToCeil(float(playerCount) / float(ratio));
 		else
 			required = maxsurvivors;
@@ -963,17 +964,20 @@ bool IsAllowedClass(const TFClassType class)
 	return true;
 }
 
-void ForceWin(const int team)
+void ForceWin(int team)
 {
-	int ent = FindEntityByClassname(-1, "team_control_point_master");
-	if (ent == -1)
+	int ent = FindEntityByClassname(-1, "game_round_win");
+	if (ent < 1)
 	{
-		ent = CreateEntityByName("team_control_point_master");
-		DispatchSpawn(ent);
-		AcceptEntityInput(ent, "Enable");
+		ent = CreateEntityByName("game_round_win");
+		if (!IsValidEntity(ent))
+			return;
 	}
+	DispatchKeyValue(ent, "force_map_reset", "1");
+	DispatchSpawn(ent);
 	SetVariantInt(team);
-	AcceptEntityInput(ent, "SetWinner");
+	AcceptEntityInput(ent, "SetTeam");
+	AcceptEntityInput(ent, "RoundWin");
 }
 
 /* Debug output
