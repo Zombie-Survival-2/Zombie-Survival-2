@@ -963,17 +963,13 @@ bool IsAllowedClass(const TFClassType class)
 	return true;
 }
 
-void ForceWin(const int team)
+void ForceWin(int team)
 {
-	int ent = FindEntityByClassname(-1, "team_control_point_master");
-	if (ent == -1)
-	{
-		ent = CreateEntityByName("team_control_point_master");
-		DispatchSpawn(ent);
-		AcceptEntityInput(ent, "Enable");
-	}
-	SetVariantInt(team);
-	AcceptEntityInput(ent, "SetWinner");
+	int ent = CreateEntityByName("game_round_win");
+	SetEntProp(ent, Prop_Send, "m_iTeamNum", team);
+	SetEntProp(ent, Prop_Send, "m_bForceMapReset", 1);
+	DispatchSpawn(ent);
+	AcceptEntityInput(ent, "RoundWin");
 }
 
 /* Debug output
