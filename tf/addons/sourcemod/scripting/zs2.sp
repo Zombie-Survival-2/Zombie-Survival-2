@@ -229,6 +229,8 @@ public void OnMapStart()
 			allowedGamemods.PushString(gamemods[i]);
 	}
 	json_cleanup_and_delete(serverdata);
+	
+	waitingForPlayers = true;
 }
 
 public void OnEntityCreated(int entity, const char[] classname)
@@ -315,11 +317,6 @@ Action Timer_DisplayIntro(Handle timer, int client)
 /* Round initialisation
 ==================================================================================================== */
 
-public void TF2_OnWaitingForPlayersStart()
-{
-	waitingForPlayers = true;
-}
-
 public void TF2_OnWaitingForPlayersEnd()
 {
 	waitingForPlayers = false;
@@ -327,7 +324,8 @@ public void TF2_OnWaitingForPlayersEnd()
 
 void Event_PreRoundStart(Event event, const char[] name, bool dontBroadcast)
 {
-	if(waitingForPlayers) return;
+	if (waitingForPlayers)
+		return;
 	
 	// Create plugin round timer
 	int timer = CreateEntityByName("team_round_timer");
@@ -959,6 +957,7 @@ bool IsAllowedClass(const TFClassType class)
 
 void ForceWin(int team)
 {
+	// Create separate game winning entity, map uses tf_gamerules to determine victories
 	int ent = CreateEntityByName("game_round_win");
 	DispatchKeyValue(ent, "force_map_reset", "1");
 	DispatchSpawn(ent);
