@@ -327,6 +327,8 @@ public void TF2_OnWaitingForPlayersEnd()
 
 void Event_PreRoundStart(Event event, const char[] name, bool dontBroadcast)
 {
+	if(waitingForPlayers) return;
+	
 	// Create plugin round timer
 	int timer = CreateEntityByName("team_round_timer");
 	DispatchKeyValue(timer, "targetname", "zs2_timer");
