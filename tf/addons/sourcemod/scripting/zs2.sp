@@ -252,7 +252,11 @@ void OnTimerSpawned(int entity)
 	GetEntPropString(entity, Prop_Data, "m_iName", name, sizeof(name));
 	if (!StrEqual(name, "zs2_timer"))
 	{
+		// Change setup time of original timers so doors open properly
 		DebugText("Stopped timer %s", name);
+		char seconds[4];
+		IntToString(setupDuration, seconds, sizeof(seconds));
+		DispatchKeyValue(entity, "setup_length", seconds);
 		DispatchKeyValue(entity, "auto_countdown", "0");
 		OnCaptureSpawn();
 	}
