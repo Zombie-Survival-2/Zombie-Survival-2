@@ -57,8 +57,7 @@ public const char captures[5][32] = {
 	"item_teamflag",
 	"func_capturezone"
 };
-bool mapStarted,
-	setupTime,
+bool setupTime,
 	roundStarted,
 	waitingForPlayers,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
@@ -101,6 +100,7 @@ public void OnPluginStart()
 	HookEvent("player_spawn", Event_OnSpawn);
 	HookEvent("post_inventory_application", Event_PlayerRegen);
 	HookEvent("teamplay_broadcast_audio", Event_Audio, EventHookMode_Pre);
+	HookEvent("teamplay_round_start", Event_PreRoundStart, EventHookMode_Pre);
 	HookEvent("teamplay_round_start", Event_RoundStart);
 	HookEvent("teamplay_round_win", Event_RoundEnd);
 	HookEvent("teamplay_setup_finished", Event_SetupFinished);
@@ -229,13 +229,6 @@ public void OnMapStart()
 			allowedGamemods.PushString(gamemods[i]);
 	}
 	json_cleanup_and_delete(serverdata);
-	
-	mapStarted = true;
-}
-
-public void OnMapEnd()
-{
-	mapStarted = false;
 }
 
 public void OnEntityCreated(int entity, const char[] classname)
@@ -244,8 +237,6 @@ public void OnEntityCreated(int entity, const char[] classname)
 		AcceptEntityInput(entity, "KillHierarchy");
 	else if (strcmp(classname, "team_round_timer") == 0)
 		SDKHook(entity, SDKHook_SpawnPost, OnTimerSpawned);
-	else if(strcmp(classname, "team_control_point_master") == 0)
-		SDKHook(entity, SDKHook_SpawnPost, OnCaptureSpawn);
 }
 
 void OnTimerSpawned(int entity)
@@ -255,39 +246,11 @@ void OnTimerSpawned(int entity)
 	if (!StrEqual(name, "zs2_timer"))
 	{
 		DebugText("Stopped timer %s", name);
+		char seconds[4];
+		IntToString(setupDuration, seconds, sizeof(seconds));
+		DispatchKeyValue(entity, "setup_length", seconds);
 		DispatchKeyValue(entity, "auto_countdown", "0");
 	}
-}
-
-void OnCaptureSpawn(int entity)
-{
-	if (!mapStarted || waitingForPlayers)
-		return;
-
-	// Create plugin round timer
-	int timer = CreateEntityByName("team_round_timer");
-	DispatchKeyValue(timer, "targetname", "zs2_timer");
-	char seconds[4];
-	IntToString(roundDuration, seconds, sizeof(seconds));
-	DispatchKeyValue(timer, "timer_length", seconds);
-	IntToString(setupDuration, seconds, sizeof(seconds));
-	DispatchKeyValue(timer, "setup_length", seconds);
-	DispatchKeyValue(timer, "reset_time", "1");
-	DispatchKeyValue(timer, "auto_countdown", "1");
-	DispatchSpawn(timer);
-	
-	// Show plugin round timer in HUD
-	SetVariantString("OnSetupStart !self:ShowInHUD:1:0:-1");
-	AcceptEntityInput(timer, "AddOutput");
-	SetVariantString("OnSetupStart !self:Enable:0:0:-1");
-	AcceptEntityInput(timer, "AddOutput");
-	SetVariantString("OnSetupFinished !self:ShowInHUD:1:0:-1");
-	AcceptEntityInput(timer, "AddOutput");
-	SetVariantString("OnSetupFinished !self:Enable:0:0:-1");
-	AcceptEntityInput(timer, "AddOutput");
-	
-	// Hook win announcement, required since normal round timer has stopped
-	HookSingleEntityOutput(timer, "OnFinished", RoundTimerOnEnd, true);
 }
 
 public void OnConfigsExecuted()
@@ -360,6 +323,34 @@ public void TF2_OnWaitingForPlayersStart()
 public void TF2_OnWaitingForPlayersEnd()
 {
 	waitingForPlayers = false;
+}
+
+void Event_PreRoundStart(Event event, const char[] name, bool dontBroadcast)
+{
+	// Create plugin round timer
+	int timer = CreateEntityByName("team_round_timer");
+	DispatchKeyValue(timer, "targetname", "zs2_timer");
+	char seconds[4];
+	IntToString(roundDuration, seconds, sizeof(seconds));
+	DispatchKeyValue(timer, "timer_length", seconds);
+	IntToString(setupDuration, seconds, sizeof(seconds));
+	DispatchKeyValue(timer, "setup_length", seconds);
+	DispatchKeyValue(timer, "reset_time", "1");
+	DispatchKeyValue(timer, "auto_countdown", "1");
+	DispatchSpawn(timer);
+	
+	// Show plugin round timer in HUD
+	SetVariantString("OnSetupStart !self:ShowInHUD:1:0:-1");
+	AcceptEntityInput(timer, "AddOutput");
+	SetVariantString("OnSetupStart !self:Enable:0:0:-1");
+	AcceptEntityInput(timer, "AddOutput");
+	SetVariantString("OnSetupFinished !self:ShowInHUD:1:0:-1");
+	AcceptEntityInput(timer, "AddOutput");
+	SetVariantString("OnSetupFinished !self:Enable:0:0:-1");
+	AcceptEntityInput(timer, "AddOutput");
+	
+	// Hook win announcement, required since normal round timer has stopped
+	HookSingleEntityOutput(timer, "OnFinished", RoundTimerOnEnd, true);
 }
 
 void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
