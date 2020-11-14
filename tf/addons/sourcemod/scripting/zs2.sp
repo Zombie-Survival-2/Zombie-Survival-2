@@ -24,7 +24,6 @@
 #define PLUGIN_VERSION "0.1 Beta"
 #define MOTD_VERSION "0.1"
 #define IsValidClient(%1) (1 <= %1 <= MaxClients && IsClientInGame(%1))
-#define MAP_HAS_CAP (FindEntityByClassname(-1, "team_control_point_master") != -1)
 
 // Plugin information
 public Plugin myinfo = {
@@ -58,17 +57,18 @@ public const char captures[5][32] = {
 	"item_teamflag",
 	"func_capturezone"
 };
-bool mapStarted,
-	setupTime,
+bool setupTime,
 	roundStarted,
 	waitingForPlayers,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
-int TEAM_SURVIVORS = 2,
+int iSeconds,
+	TEAM_SURVIVORS = 2,
 	TEAM_ZOMBIES = 3,
 	queuePoints[MAXPLAYERS+1],
 	damageDealt[MAXPLAYERS+1];
 GameMod gameMod = Game_Survival;
+Handle roundTimer;
 
 // JSON-controlled variables, allowing gamemods should also be included here
 bool freezeInSetup;
@@ -230,77 +230,12 @@ public void OnMapStart()
 			allowedGamemods.PushString(gamemods[i]);
 	}
 	json_cleanup_and_delete(serverdata);
-	mapStarted = true;
-}
-
-public void OnMapEnd()
-{
-	mapStarted = false;
 }
 
 public void OnEntityCreated(int entity, const char[] classname)
 {
 	if (strcmp(classname, "tf_logic_koth") == 0 || strcmp(classname, "tf_logic_arena") == 0)
 		AcceptEntityInput(entity, "KillHierarchy");
-	else if (strcmp(classname, "team_round_timer") == 0)
-		SDKHook(entity, SDKHook_SpawnPost, OnTimerSpawned);
-	else if(strcmp(classname, "team_control_point_master") == 0)
-		SDKHook(entity, SDKHook_SpawnPost, OnCaptureSpawn);
-}
-
-void OnTimerSpawned(int entity)
-{
-	DebugText("OnTimerSpawned - MAP_HAS_CAP %i", view_as<int>(MAP_HAS_CAP));
-	if(MAP_HAS_CAP) 
-	{
-		char name[64];
-		GetEntPropString(entity, Prop_Data, "m_iName", name, sizeof(name));
-		if (!StrEqual(name, "zs2_timer"))
-		{
-			DebugText("Stopped timer %s", name);
-			DispatchKeyValue(entity, "auto_countdown", "0");
-		}
-	}
-	else 
-	{
-		char seconds[4];
-		IntToString(roundDuration, seconds, sizeof(seconds));
-		DispatchKeyValue(entity, "timer_length", seconds);
-		DispatchKeyValue(entity, "max_length", seconds);
-		IntToString(setupDuration, seconds, sizeof(seconds));
-		DispatchKeyValue(entity, "setup_length", seconds);
-	}
-}
-
-void OnCaptureSpawn(int entity)
-{
-	if (!mapStarted || !MAP_HAS_CAP || waitingForPlayers)
-		return;
-
-	// Create plugin round timer
-	int timer = CreateEntityByName("team_round_timer");
-	DispatchKeyValue(timer, "targetname", "zs2_timer");
-	char seconds[4];
-	IntToString(roundDuration, seconds, sizeof(seconds));
-	DispatchKeyValue(timer, "timer_length", seconds);
-	IntToString(setupDuration, seconds, sizeof(seconds));
-	DispatchKeyValue(timer, "setup_length", seconds);
-	DispatchKeyValue(timer, "reset_time", "1");
-	DispatchKeyValue(timer, "auto_countdown", "1");
-	DispatchSpawn(timer);
-	
-	// Show plugin round timer in HUD
-	SetVariantString("OnSetupStart !self:ShowInHUD:1:0:-1");
-	AcceptEntityInput(timer, "AddOutput");
-	SetVariantString("OnSetupStart !self:Enable:0:0:-1");
-	AcceptEntityInput(timer, "AddOutput");
-	SetVariantString("OnSetupFinished !self:ShowInHUD:1:0:-1");
-	AcceptEntityInput(timer, "AddOutput");
-	SetVariantString("OnSetupFinished !self:Enable:0:0:-1");
-	AcceptEntityInput(timer, "AddOutput");
-	
-	// Hook win announcement, required since normal round timer has stopped
-	HookSingleEntityOutput(timer, "OnFinished", RoundTimerOnEnd, true);
 }
 
 public void OnConfigsExecuted()
@@ -379,7 +314,15 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
 	if (!waitingForPlayers)
 	{
+		int ent = -1;
+		while ((ent = FindEntityByClassname(ent, "team_round_timer")) != -1)
+		{
+			AcceptEntityInput(ent, "Kill");
+		}
+
 		setupTime = true;
+		iSeconds = setupDuration;
+		roundTimer = CreateTimer(1.0, CountDown, _, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
 		// Determine required number of survivors
 		int playerCount = GetClientCount(true);
 		int ratio = gcv_ratio.IntValue;
@@ -438,6 +381,8 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 {
 	DebugText("Setup time finished");
 	setupTime = false;
+	iSeconds = roundDuration;
+	roundTimer = CreateTimer(1.0, CountDown2, _, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
 
 	// Force resupply lockers to only work for zombies
 	int ent = -1;
@@ -460,14 +405,50 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 	}
 }
 
-void RoundTimerOnEnd(const char[] output, int caller, int activator, float delay)
+public Action CountDown(Handle timer)
 {
-	// Dynamically call victories based on current mode
-	switch (gameMod)
+	iSeconds--;
+
+	SetHudTextParams(-1.0, 0.15, 1.1, 255, 255, 255, 255);
+	for(int i = 1; i <= MaxClients; i++)
 	{
-		case Game_Defend, Game_Survival:
-			ForceWin(TEAM_SURVIVORS);
+		if(IsValidClient(i) && !IsFakeClient(i))
+			ShowHudText(i, -1, "%02d:%02d", iSeconds / 60, iSeconds % 60);
 	}
+
+	if(iSeconds <= 0)
+	{
+		roundTimer = null;
+		Event_SetupFinished(null, "", false);
+		return Plugin_Stop;
+	}
+
+	return Plugin_Continue;
+}
+
+public Action CountDown2(Handle timer)
+{
+	iSeconds--;
+
+	SetHudTextParams(-1.0, 0.15, 1.1, 255, 255, 255, 255);
+	for(int i = 1; i <= MaxClients; i++)
+	{
+		if(IsValidClient(i) && !IsFakeClient(i))
+			ShowHudText(i, -1, "%02d:%02d", iSeconds / 60, iSeconds % 60);
+	}
+
+	if(iSeconds <= 0)
+	{
+		roundTimer = null;
+		switch (gameMod)
+		{
+			case Game_Defend, Game_Survival:
+				ForceWin(TEAM_SURVIVORS);
+		}
+		return Plugin_Stop;
+	}
+
+	return Plugin_Continue;
 }
 
 void VoteGamemod()
@@ -977,6 +958,8 @@ bool IsAllowedClass(const TFClassType class)
 
 void ForceWin(int team)
 {
+	delete roundTimer;
+
 	int ent = FindEntityByClassname(-1, "game_round_win");
 	if (ent < 1)
 	{
