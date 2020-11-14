@@ -24,6 +24,7 @@
 #define PLUGIN_VERSION "0.1 Beta"
 #define MOTD_VERSION "0.1"
 #define IsValidClient(%1) (1 <= %1 <= MaxClients && IsClientInGame(%1))
+#define MAP_HAS_CAP (FindEntityByClassname(-1, "team_control_point_master") != -1)
 
 // Plugin information
 public Plugin myinfo = {
@@ -229,7 +230,6 @@ public void OnMapStart()
 			allowedGamemods.PushString(gamemods[i]);
 	}
 	json_cleanup_and_delete(serverdata);
-	
 	mapStarted = true;
 }
 
@@ -250,18 +250,31 @@ public void OnEntityCreated(int entity, const char[] classname)
 
 void OnTimerSpawned(int entity)
 {
-	char name[64];
-	GetEntPropString(entity, Prop_Data, "m_iName", name, sizeof(name));
-	if (!StrEqual(name, "zs2_timer"))
+	DebugText("OnTimerSpawned - MAP_HAS_CAP %i", view_as<int>(MAP_HAS_CAP));
+	if(MAP_HAS_CAP) 
 	{
-		DebugText("Stopped timer %s", name);
-		DispatchKeyValue(entity, "auto_countdown", "0");
+		char name[64];
+		GetEntPropString(entity, Prop_Data, "m_iName", name, sizeof(name));
+		if (!StrEqual(name, "zs2_timer"))
+		{
+			DebugText("Stopped timer %s", name);
+			DispatchKeyValue(entity, "auto_countdown", "0");
+		}
+	}
+	else 
+	{
+		char seconds[4];
+		IntToString(roundDuration, seconds, sizeof(seconds));
+		DispatchKeyValue(entity, "timer_length", seconds);
+		DispatchKeyValue(entity, "max_length", seconds);
+		IntToString(setupDuration, seconds, sizeof(seconds));
+		DispatchKeyValue(entity, "setup_length", seconds);
 	}
 }
 
 void OnCaptureSpawn(int entity)
 {
-	if (!mapStarted || waitingForPlayers)
+	if (!mapStarted || !MAP_HAS_CAP || waitingForPlayers)
 		return;
 
 	// Create plugin round timer
@@ -452,9 +465,7 @@ void RoundTimerOnEnd(const char[] output, int caller, int activator, float delay
 	// Dynamically call victories based on current mode
 	switch (gameMod)
 	{
-		case Game_Defend:
-			ForceWin(TEAM_SURVIVORS);
-		case Game_Survival:
+		case Game_Defend, Game_Survival:
 			ForceWin(TEAM_SURVIVORS);
 	}
 }
