@@ -237,6 +237,19 @@ public void OnEntityCreated(int entity, const char[] classname)
 {
 	if (strcmp(classname, "tf_logic_koth") == 0 || strcmp(classname, "tf_logic_arena") == 0)
 		AcceptEntityInput(entity, "KillHierarchy");
+	else if (strcmp(classname, "team_round_timer") == 0)
+		SDKHook(entity, SDKHook_SpawnPost, OnTimerSpawned);
+}
+
+void OnTimerSpawned(int entity)
+{
+	// Change setup time of original timers so doors open properly
+	DebugText("Stopping existing timer");
+	char seconds[4];
+	IntToString(setupDuration, seconds, sizeof(seconds));
+	DispatchKeyValue(entity, "setup_length", seconds);
+	DispatchKeyValue(entity, "auto_countdown", "0");
+	DispatchKeyValue(entity, "show_in_hud", "0");
 }
 
 public void OnConfigsExecuted()
@@ -315,12 +328,6 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
 	if (!waitingForPlayers)
 	{
-		int ent = -1;
-		while ((ent = FindEntityByClassname(ent, "team_round_timer")) != -1)
-		{
-			AcceptEntityInput(ent, "Kill");
-		}
-
 		setupTime = true;
 		iSeconds = setupDuration;
 		roundTimer = CreateTimer(1.0, CountDown, _, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
@@ -410,18 +417,18 @@ public Action CountDown(Handle timer)
 {
 	iSeconds--;
 
-	SetHudTextParams(-1.0, 0.15, 1.1, 255, 255, 255, 255);
-	for (int i = 1; i <= MaxClients; i++)
-	{
-		if (IsValidClient(i) && !IsFakeClient(i))
-			ShowHudText(i, -1, "%d:%02d", iSeconds / 60, iSeconds % 60);
-	}
-
 	if (iSeconds <= 0)
 	{
 		roundTimer = null;
 		Event_SetupFinished(null, "", false);
 		return Plugin_Stop;
+	}
+
+	SetHudTextParams(-1.0, 0.075, 1.1, 255, 255, 255, 255);
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsValidClient(i) && !IsFakeClient(i))
+			ShowHudText(i, -1, "Setup ends in %d:%02d", iSeconds / 60, iSeconds % 60);
 	}
 
 	return Plugin_Continue;
@@ -430,13 +437,6 @@ public Action CountDown(Handle timer)
 public Action CountDown2(Handle timer)
 {
 	iSeconds--;
-
-	SetHudTextParams(-1.0, 0.15, 1.1, 255, 255, 255, 255);
-	for (int i = 1; i <= MaxClients; i++)
-	{
-		if (IsValidClient(i) && !IsFakeClient(i))
-			ShowHudText(i, -1, "%02d:%02d", iSeconds / 60, iSeconds % 60);
-	}
 
 	if (iSeconds <= 0)
 	{
@@ -447,6 +447,13 @@ public Action CountDown2(Handle timer)
 				ForceWin(TEAM_SURVIVORS);
 		}
 		return Plugin_Stop;
+	}
+
+	SetHudTextParams(-1.0, 0.075, 1.1, 255, 255, 255, 255);
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsValidClient(i) && !IsFakeClient(i))
+			ShowHudText(i, -1, "%d:%02d remaining", iSeconds / 60, iSeconds % 60);
 	}
 
 	return Plugin_Continue;
