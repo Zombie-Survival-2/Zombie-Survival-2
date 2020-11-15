@@ -50,12 +50,13 @@ enum GameMod
 	// Game_Waves,
 	// Game_Scavenge
 };
-public const char captures[5][32] = {
+public const char captures[6][32] = {
 	"team_control_point_master",
 	"team_control_point",
 	"trigger_capture_area",
 	"item_teamflag",
-	"func_capturezone"
+	"func_capturezone",
+	"mapobj_cart_dispenser"
 };
 bool setupTime,
 	roundStarted,
@@ -182,7 +183,7 @@ public void OnMapStart()
 	char mapName[64];
 	GetCurrentMap(mapName, sizeof(mapName));
 	JSON_Object serverdata = ReadScript(mapName);
-	allowedGamemods = new ArrayList(16, 2);
+	allowedGamemods = new ArrayList(16, 2); // Increase with each added round type
 	if (serverdata != null)
 	{
 		DebugText("JSON file found");
@@ -249,7 +250,7 @@ public void OnConfigsExecuted()
 	CreateTimer(gcv_timerpoints.FloatValue, Timer_PlaytimePoints, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
 
-void InsertServerTag(const char[] insertThisTag) 
+void InsertServerTag(const char[] insertThisTag)
 {
 	ConVar tags = FindConVar("sv_tags");
 	if (tags != null) 
@@ -410,13 +411,13 @@ public Action CountDown(Handle timer)
 	iSeconds--;
 
 	SetHudTextParams(-1.0, 0.15, 1.1, 255, 255, 255, 255);
-	for(int i = 1; i <= MaxClients; i++)
+	for (int i = 1; i <= MaxClients; i++)
 	{
-		if(IsValidClient(i) && !IsFakeClient(i))
-			ShowHudText(i, -1, "%02d:%02d", iSeconds / 60, iSeconds % 60);
+		if (IsValidClient(i) && !IsFakeClient(i))
+			ShowHudText(i, -1, "%d:%02d", iSeconds / 60, iSeconds % 60);
 	}
 
-	if(iSeconds <= 0)
+	if (iSeconds <= 0)
 	{
 		roundTimer = null;
 		Event_SetupFinished(null, "", false);
@@ -431,13 +432,13 @@ public Action CountDown2(Handle timer)
 	iSeconds--;
 
 	SetHudTextParams(-1.0, 0.15, 1.1, 255, 255, 255, 255);
-	for(int i = 1; i <= MaxClients; i++)
+	for (int i = 1; i <= MaxClients; i++)
 	{
-		if(IsValidClient(i) && !IsFakeClient(i))
+		if (IsValidClient(i) && !IsFakeClient(i))
 			ShowHudText(i, -1, "%02d:%02d", iSeconds / 60, iSeconds % 60);
 	}
 
-	if(iSeconds <= 0)
+	if (iSeconds <= 0)
 	{
 		roundTimer = null;
 		switch (gameMod)
