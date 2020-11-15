@@ -143,7 +143,10 @@ public void OnPluginStart()
 
 public void OnMapStart() 
 {
-	// Sounds precaching and downloading
+	// Standard sounds precaching
+	PrecacheSound("replay/replaydialog_warn.wav");
+	
+	// Custom sounds precaching and downloading
 	PrecacheSound("zs2/death.mp3");
 	AddFileToDownloadsTable("sound/zs2/death.mp3");
 	PrecacheSound("zs2/defeat.mp3");
@@ -417,14 +420,14 @@ public Action CountDown(Handle timer)
 {
 	iSeconds--;
 
-	if (iSeconds <= 0)
+	if (iSeconds < 0)
 	{
 		roundTimer = null;
 		Event_SetupFinished(null, "", false);
 		return Plugin_Stop;
 	}
 
-	SetHudTextParams(-1.0, 0.075, 1.1, 255, 255, 255, 255);
+	SetHudTextParams(-1.0, 0.05, 1.1, 255, 255, 255, 255);
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (IsValidClient(i) && !IsFakeClient(i))
@@ -438,7 +441,7 @@ public Action CountDown2(Handle timer)
 {
 	iSeconds--;
 
-	if (iSeconds <= 0)
+	if (iSeconds < 0)
 	{
 		roundTimer = null;
 		switch (gameMod)
@@ -449,7 +452,7 @@ public Action CountDown2(Handle timer)
 		return Plugin_Stop;
 	}
 
-	SetHudTextParams(-1.0, 0.075, 1.1, 255, 255, 255, 255);
+	SetHudTextParams(-1.0, 0.05, 1.1, 255, 255, 255, 255);
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (IsValidClient(i) && !IsFakeClient(i))
@@ -533,6 +536,8 @@ public int GameVote(NativeVote vote, MenuAction action, int param1, int param2)
 
 void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
+	delete roundTimer;
+
 	CreateTimer(3.0, Timer_CalcQueuePoints, _, TIMER_FLAG_NO_MAPCHANGE);
 
 	int team = event.GetInt("team");
@@ -606,8 +611,7 @@ Action Listener_JoinClass(int client, const char[] command, int args)
 
 		if (GetClientTeam(client) == TEAM_SURVIVORS && !IsAllowedClass(TF2_GetClass(arg)))
 		{
-			// Placeholder sound
-			EmitSoundToClient(client, "zs2/death.mp3", client);
+			EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 			return Plugin_Handled;
 		}
 	}
@@ -966,8 +970,6 @@ bool IsAllowedClass(const TFClassType class)
 
 void ForceWin(int team)
 {
-	delete roundTimer;
-
 	int ent = FindEntityByClassname(-1, "game_round_win");
 	if (ent < 1)
 	{
