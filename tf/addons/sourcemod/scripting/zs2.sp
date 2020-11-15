@@ -50,12 +50,13 @@ enum GameMod
 	// Game_Waves,
 	// Game_Scavenge
 };
-public const char captures[5][32] = {
+public const char captures[6][32] = {
 	"team_control_point_master",
 	"team_control_point",
 	"trigger_capture_area",
 	"item_teamflag",
-	"func_capturezone"
+	"func_capturezone",
+	"mapobj_cart_dispenser"
 };
 bool setupTime,
 	roundStarted,
@@ -97,6 +98,11 @@ ConVar gcv_debug,
 
 public void OnPluginStart()
 {
+	if(GetEngineVersion() != Engine_TF2)
+	{
+		SetFailState("This gamemod can only run on Team Fortress 2 Server.");
+	}
+
 	// Events
 	HookEvent("player_death", Event_OnDeath);
 	HookEvent("player_spawn", Event_OnSpawn);
@@ -142,7 +148,10 @@ public void OnPluginStart()
 
 public void OnMapStart() 
 {
-	// Sounds precaching and downloading
+	// Standard sounds precaching
+	PrecacheSound("replay/replaydialog_warn.wav");
+	
+	// Custom sounds precaching and downloading
 	PrecacheSound("zs2/death.mp3");
 	AddFileToDownloadsTable("sound/zs2/death.mp3");
 	PrecacheSound("zs2/defeat.mp3");
@@ -182,7 +191,7 @@ public void OnMapStart()
 	char mapName[64];
 	GetCurrentMap(mapName, sizeof(mapName));
 	JSON_Object serverdata = ReadScript(mapName);
-	allowedGamemods = new ArrayList(16, 2);
+	allowedGamemods = new ArrayList(16, 2); // Increase with each added round type
 	if (serverdata != null)
 	{
 		DebugText("JSON file found");
@@ -249,7 +258,7 @@ public void OnConfigsExecuted()
 	CreateTimer(gcv_timerpoints.FloatValue, Timer_PlaytimePoints, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
 
-void InsertServerTag(const char[] insertThisTag) 
+void InsertServerTag(const char[] insertThisTag)
 {
 	ConVar tags = FindConVar("sv_tags");
 	if (tags != null) 
@@ -322,7 +331,9 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 
 		setupTime = true;
 		iSeconds = setupDuration;
+		delete roundTimer;
 		roundTimer = CreateTimer(1.0, CountDown, _, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
+
 		// Determine required number of survivors
 		int playerCount = GetClientCount(true);
 		int ratio = gcv_ratio.IntValue;
@@ -331,12 +342,14 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 		int maxsurvivors = gcv_maxsurvivors.IntValue;
 		if (maxsurvivors > 32 || maxsurvivors < 1)
 			maxsurvivors = 6;
+
 		// Set up required survivors, do not let it exceed the maximum value
 		int required;
 		if (playerCount <= ratio * maxsurvivors - ratio)
 			required = RoundToCeil(float(playerCount) / float(ratio));
 		else
 			required = maxsurvivors;
+
 		// Populate survivor team, will need to be fired for the zombie team during setup time if someone disconnects
 		for (int i = 0; i < required; i++)
 		{
@@ -351,6 +364,7 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 			Survivor_Setup(player);
 			CPrintToChat(player, "%s {haunted}You have been selected to become a {normal}Survivor.", MESSAGE_PREFIX);
 		}
+
 		// Notify players of their selected team and alter their loadout and movement if necessary
 		for (int i = 1; i <= MaxClients; i++)
 		{
@@ -364,6 +378,7 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 				CPrintToChat(i, "%s {haunted}You have been selected to become a {normal}Zombie.", MESSAGE_PREFIX);
 			}
 		}
+
 		// Dynamically call methods based on current mode
 		switch (gameMod)
 		{
@@ -377,11 +392,12 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 	}
 }
 
-void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast) 
+void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 {
 	DebugText("Setup time finished");
 	setupTime = false;
 	iSeconds = roundDuration;
+	delete roundTimer;
 	roundTimer = CreateTimer(1.0, CountDown2, _, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
 
 	// Force resupply lockers to only work for zombies
@@ -400,44 +416,57 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 	// Check if there are no survivors
 	if (GetTeamClientCount(TEAM_SURVIVORS) == 0)
 	{
-		DebugText("No survivors, forcing a zombie team victory");
 		ForceWin(TEAM_ZOMBIES);
 	}
 }
 
 public Action CountDown(Handle timer)
 {
-	iSeconds--;
+    iSeconds--;
 
-	SetHudTextParams(-1.0, 0.15, 1.1, 255, 255, 255, 255);
-	for(int i = 1; i <= MaxClients; i++)
-	{
-		if(IsValidClient(i) && !IsFakeClient(i))
-			ShowHudText(i, -1, "%02d:%02d", iSeconds / 60, iSeconds % 60);
-	}
+    if (iSeconds < 0)
+    {
+        roundTimer = null;
+        Event event = CreateEvent("teamplay_setup_finished");
+        event.Fire();
 
-	if(iSeconds <= 0)
-	{
-		roundTimer = null;
-		Event_SetupFinished(null, "", false);
-		return Plugin_Stop;
-	}
+        int ent = -1;
+        while ((ent = FindEntityByClassname(ent, "func_door")) != -1)
+        {
+            AcceptEntityInput(ent, "Unlock");
+            AcceptEntityInput(ent, "Open");
+        }
 
-	return Plugin_Continue;
+        ent = -1;
+        while ((ent = FindEntityByClassname(ent, "prop_dynamic")) != -1)
+        {
+            char tName[64];
+            GetEntPropString(ent, Prop_Data, "m_iName", tName, sizeof(tName));
+            if (StrContains(tName, "door", false) != -1 || StrContains(tName, "gate", false) != -1)
+            {
+                AcceptEntityInput(ent, "Unlock");
+                AcceptEntityInput(ent, "Open");
+            }
+        }
+
+        return Plugin_Stop;
+    }
+
+    SetHudTextParams(-1.0, 0.05, 1.1, 255, 255, 255, 255);
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (IsValidClient(i) && !IsFakeClient(i))
+            ShowHudText(i, -1, "Setup ends in %d:%02d", iSeconds / 60, iSeconds % 60);
+    }
+
+    return Plugin_Continue;
 }
 
 public Action CountDown2(Handle timer)
 {
 	iSeconds--;
 
-	SetHudTextParams(-1.0, 0.15, 1.1, 255, 255, 255, 255);
-	for(int i = 1; i <= MaxClients; i++)
-	{
-		if(IsValidClient(i) && !IsFakeClient(i))
-			ShowHudText(i, -1, "%02d:%02d", iSeconds / 60, iSeconds % 60);
-	}
-
-	if(iSeconds <= 0)
+	if (iSeconds < 0)
 	{
 		roundTimer = null;
 		switch (gameMod)
@@ -446,6 +475,13 @@ public Action CountDown2(Handle timer)
 				ForceWin(TEAM_SURVIVORS);
 		}
 		return Plugin_Stop;
+	}
+
+	SetHudTextParams(-1.0, 0.05, 1.1, 255, 255, 255, 255);
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsValidClient(i) && !IsFakeClient(i))
+			ShowHudText(i, -1, "%d:%02d remaining", iSeconds / 60, iSeconds % 60);
 	}
 
 	return Plugin_Continue;
@@ -525,9 +561,10 @@ public int GameVote(NativeVote vote, MenuAction action, int param1, int param2)
 
 void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
+	delete roundTimer;
 	CreateTimer(3.0, Timer_CalcQueuePoints, _, TIMER_FLAG_NO_MAPCHANGE);
-
 	int team = event.GetInt("team");
+
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (IsValidClient(i))
@@ -598,8 +635,7 @@ Action Listener_JoinClass(int client, const char[] command, int args)
 
 		if (GetClientTeam(client) == TEAM_SURVIVORS && !IsAllowedClass(TF2_GetClass(arg)))
 		{
-			// Placeholder sound
-			EmitSoundToClient(client, "zs2/death.mp3", client);
+			EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 			return Plugin_Handled;
 		}
 	}
@@ -708,7 +744,6 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 				}
 				else if (survivorsLiving == 0)
 				{
-					DebugText("Forcing a zombie team victory");
 					ForceWin(TEAM_ZOMBIES);
 				}
 				
@@ -958,7 +993,7 @@ bool IsAllowedClass(const TFClassType class)
 
 void ForceWin(int team)
 {
-	delete roundTimer;
+	DebugText("Forcing win to %i", team);
 
 	int ent = FindEntityByClassname(-1, "game_round_win");
 	if (ent < 1)
