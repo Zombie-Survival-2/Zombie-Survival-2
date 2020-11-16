@@ -248,6 +248,8 @@ public void OnEntityCreated(int entity, const char[] classname)
 {
 	if (strcmp(classname, "tf_logic_koth") == 0 || strcmp(classname, "tf_logic_arena") == 0)
 		AcceptEntityInput(entity, "KillHierarchy");
+	else if (strcmp(classname, "team_round_timer") == 0)
+		AcceptEntityInput(entity, "Kill");
 }
 
 public void OnConfigsExecuted()
