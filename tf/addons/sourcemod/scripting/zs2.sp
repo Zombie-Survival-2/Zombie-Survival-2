@@ -98,9 +98,9 @@ ConVar gcv_debug,
 
 public void OnPluginStart()
 {
-	if(GetEngineVersion() != Engine_TF2)
+	if (GetEngineVersion() != Engine_TF2)
 	{
-		SetFailState("This gamemod can only run on Team Fortress 2 Server.");
+		SetFailState("This game mode can only run on a Team Fortress 2 Dedicated Server.");
 	}
 
 	// Events
@@ -323,12 +323,6 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
 	if (!waitingForPlayers)
 	{
-		int ent = -1;
-		while ((ent = FindEntityByClassname(ent, "team_round_timer")) != -1)
-		{
-			AcceptEntityInput(ent, "Kill");
-		}
-
 		setupTime = true;
 		iSeconds = setupDuration;
 		delete roundTimer;
@@ -444,8 +438,8 @@ public Action CountDown(Handle timer)
             GetEntPropString(ent, Prop_Data, "m_iName", tName, sizeof(tName));
             if (StrContains(tName, "door", false) != -1 || StrContains(tName, "gate", false) != -1)
             {
-                AcceptEntityInput(ent, "Unlock");
-                AcceptEntityInput(ent, "Open");
+            	SetVariantString("open");
+                AcceptEntityInput(ent, "SetAnimation");
             }
         }
 
@@ -563,8 +557,8 @@ void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
 	delete roundTimer;
 	CreateTimer(3.0, Timer_CalcQueuePoints, _, TIMER_FLAG_NO_MAPCHANGE);
-	int team = event.GetInt("team");
 
+	int team = event.GetInt("team");
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (IsValidClient(i))
@@ -993,7 +987,7 @@ bool IsAllowedClass(const TFClassType class)
 
 void ForceWin(int team)
 {
-	DebugText("Forcing win to %i", team);
+	DebugText("Forcing win for team %i", team);
 
 	int ent = FindEntityByClassname(-1, "game_round_win");
 	if (ent < 1)
