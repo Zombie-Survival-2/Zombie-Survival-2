@@ -83,7 +83,7 @@ ArrayList allowedGamemods;
 ConVar gcv_debug,
 	gcv_ratio,
 	gcv_maxsurvivors,
-	gcv_mindamage, 
+	gcv_mindamage,
 	gcv_timerpoints,
 	gcv_playtimepoints,
 	gcv_killpoints,
@@ -146,7 +146,7 @@ public void OnPluginStart()
 /* Map initialisation + server tags
 ==================================================================================================== */
 
-public void OnMapStart() 
+public void OnMapStart()
 {
 	// Standard sounds precaching
 	PrecacheSound("replay/replaydialog_warn.wav");
@@ -226,6 +226,8 @@ public void OnMapStart()
 			allowedGamemods.PushString("Defend");
 		if (serverdata.GetBool("st_s"))
 			allowedGamemods.PushString("Survival");
+		if (allowedGamemods.Length <= 1)
+			SetDefaultGamemod();
 	}
 	else
 	{
@@ -237,6 +239,7 @@ public void OnMapStart()
 		introST = "";
 		for (int i = 0; i < sizeof(gamemods); i++)
 			allowedGamemods.PushString(gamemods[i]);
+		gameMod = Game_Survival;
 	}
 	json_cleanup_and_delete(serverdata);
 }
@@ -261,18 +264,18 @@ public void OnConfigsExecuted()
 void InsertServerTag(const char[] insertThisTag)
 {
 	ConVar tags = FindConVar("sv_tags");
-	if (tags != null) 
+	if (tags != null)
 	{
 		char serverTags[256];
 		// Insert server tag at end
 		tags.GetString(serverTags, sizeof(serverTags));
-		if (StrContains(serverTags, insertThisTag, true) == -1) 
+		if (StrContains(serverTags, insertThisTag, true) == -1)
 		{
 			Format(serverTags, sizeof(serverTags), "%s,%s", serverTags, insertThisTag);
 			tags.SetString(serverTags);
 			// If failed, insert server tag at start
 			tags.GetString(serverTags, sizeof(serverTags));
-			if (StrContains(serverTags, insertThisTag, true) == -1) 
+			if (StrContains(serverTags, insertThisTag, true) == -1)
 			{
 				Format(serverTags, sizeof(serverTags), "%s,%s", insertThisTag, serverTags);
 				tags.SetString(serverTags);
@@ -297,7 +300,7 @@ public void OnClientDisconnect(int client)
 	selectedAsSurvivor[client] = false;
 }
 
-Action Timer_DisplayIntro(Handle timer, int client) 
+Action Timer_DisplayIntro(Handle timer, int client)
 {
 	if (IsValidClient(client)) // Required because player might disconnect before this fires
 	{
@@ -378,7 +381,7 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 		{
 			case Game_Defend:
 				Defend_RoundStart();
-			case Game_Survival: 
+			case Game_Survival:
 				Survival_RoundStart();
 		}
 
@@ -416,44 +419,49 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 
 public Action CountDown(Handle timer)
 {
-    iSeconds--;
+	iSeconds--;
 
-    if (iSeconds < 0)
-    {
-        roundTimer = null;
-        Event event = CreateEvent("teamplay_setup_finished");
-        event.Fire();
+	if (iSeconds < 0)
+	{
+		roundTimer = null;
+		Event event = CreateEvent("teamplay_setup_finished");
+		event.Fire();
 
-        int ent = -1;
-        while ((ent = FindEntityByClassname(ent, "func_door")) != -1)
-        {
-            AcceptEntityInput(ent, "Unlock");
-            AcceptEntityInput(ent, "Open");
-        }
+		int ent = -1;
+		while ((ent = FindEntityByClassname(ent, "func_door")) != -1)
+		{
+			AcceptEntityInput(ent, "Unlock");
+			AcceptEntityInput(ent, "Open");
+			AcceptEntityInput(ent, "Lock");
+		}
+		ent = -1;
+		while ((ent = FindEntityByClassname(ent, "prop_dynamic")) != -1)
+		{
+			char tName[64];
+			GetEntPropString(ent, Prop_Data, "m_iName", tName, sizeof(tName));
+			if (StrContains(tName, "door", false) != -1 || StrContains(tName, "gate", false) != -1)
+			{
+				SetVariantString("open");
+				AcceptEntityInput(ent, "SetAnimation");
+			}
+		}
+		ent = -1;
+		while ((ent = FindEntityByClassname(ent, "trigger_multiple")) != -1)
+		{
+			AcceptEntityInput(ent, "Disable");
+		}
 
-        ent = -1;
-        while ((ent = FindEntityByClassname(ent, "prop_dynamic")) != -1)
-        {
-            char tName[64];
-            GetEntPropString(ent, Prop_Data, "m_iName", tName, sizeof(tName));
-            if (StrContains(tName, "door", false) != -1 || StrContains(tName, "gate", false) != -1)
-            {
-            	SetVariantString("open");
-                AcceptEntityInput(ent, "SetAnimation");
-            }
-        }
+		return Plugin_Stop;
+	}
 
-        return Plugin_Stop;
-    }
+	SetHudTextParams(-1.0, 0.05, 1.1, 255, 255, 255, 255);
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsValidClient(i) && !IsFakeClient(i))
+			ShowHudText(i, -1, "Setup ends in %d:%02d", iSeconds / 60, iSeconds % 60);
+	}
 
-    SetHudTextParams(-1.0, 0.05, 1.1, 255, 255, 255, 255);
-    for (int i = 1; i <= MaxClients; i++)
-    {
-        if (IsValidClient(i) && !IsFakeClient(i))
-            ShowHudText(i, -1, "Setup ends in %d:%02d", iSeconds / 60, iSeconds % 60);
-    }
-
-    return Plugin_Continue;
+	return Plugin_Continue;
 }
 
 public Action CountDown2(Handle timer)
@@ -486,18 +494,7 @@ void VoteGamemod()
 	// If no or only one round type is available, force the default
 	if (allowedGamemods.Length <= 1)
 	{
-		DebugText("Only one round type available, forcing");
-		if (allowedGamemods.Length == 1)
-		{
-			char strval[32];
-			allowedGamemods.GetString(0, strval, sizeof(strval));
-			if (StrEqual(strval, "Defend"))
-				gameMod = Game_Defend;
-			else
-				gameMod = Game_Survival;
-		}
-		else
-			gameMod = Game_Survival;
+		SetDefaultGamemod();
 	}
 	// Use a vote if there are more round types to choose from
 	else
@@ -513,6 +510,22 @@ void VoteGamemod()
 		}
 		vote.DisplayVoteToAll(13);
 	}
+}
+
+void SetDefaultGamemod()
+{
+	DebugText("Only one round type available, forcing");
+	if (allowedGamemods.Length == 1)
+	{
+		char strval[32];
+		allowedGamemods.GetString(0, strval, sizeof(strval));
+		if (StrEqual(strval, "Defend"))
+			gameMod = Game_Defend;
+		else
+			gameMod = Game_Survival;
+	}
+	else
+		gameMod = Game_Survival;
 }
 
 // https://forums.alliedmods.net/showpost.php?p=2694813&postcount=260
@@ -586,14 +599,14 @@ void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 
 Action Event_Audio(Event event, const char[] name, bool dontBroadcast)
 {
-    char strAudio[40];
-    GetEventString(event, "sound", strAudio, sizeof(strAudio));
-    
+	char strAudio[40];
+	GetEventString(event, "sound", strAudio, sizeof(strAudio));
+	
 	// Block victory and loss sounds
-    if (strncmp(strAudio, "Game.Your", 9) == 0)
-        return Plugin_Handled;
-    
-    return Plugin_Continue;
+	if (strncmp(strAudio, "Game.Your", 9) == 0)
+		return Plugin_Handled;
+	
+	return Plugin_Continue;
 }
 
 /* Client actions
@@ -608,7 +621,10 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 		return Plugin_Continue;
 
 	if (StrContains(arg, "spec", false) > -1)
+	{
+		EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 		return Plugin_Handled;
+	}
 
 	if (firstConnection[client])
 	{
@@ -617,6 +633,7 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 		return Plugin_Continue;
 	}
 
+	EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 	return Plugin_Handled;
 }
 
@@ -667,7 +684,7 @@ Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, in
 Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 {
 	int player = GetClientOfUserId(event.GetInt("userid"));
-	if (!player) 
+	if (!player)
 		return Plugin_Continue;
 
 	if (GetClientTeam(player) == TEAM_ZOMBIES)
@@ -682,7 +699,7 @@ Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 Action Event_PlayerRegen(Event event, const char[] name, bool dontBroadcast)
 {
 	int player = GetClientOfUserId(event.GetInt("userid"));
-	if (!player) 
+	if (!player)
 		return Plugin_Continue;
 
 	if (GetClientTeam(player) == TEAM_ZOMBIES)
@@ -815,25 +832,25 @@ void OnlyMelee(int client)
 		TF2_RemoveWeaponSlot(client, i);
 	}
 
-	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 2)); 
+	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 2));
 }
 
 void RemoveWearable(int client)
 {
-    int i = -1;
-    while ((i = FindEntityByClassname(i, "tf_wearable_demoshield")) != -1)
-    {
-        if (client != GetEntPropEnt(i, Prop_Send, "m_hOwnerEntity")) continue;
-        AcceptEntityInput(i, "Kill");
-    }
-} 
+	int i = -1;
+	while ((i = FindEntityByClassname(i, "tf_wearable_demoshield")) != -1)
+	{
+		if (client != GetEntPropEnt(i, Prop_Send, "m_hOwnerEntity")) continue;
+		AcceptEntityInput(i, "Kill");
+	}
+}
 
 /* Commands
 ==================================================================================================== */
 
 public Action Command_ZS2(int client, int args)
 {
-	if (client == 0) 
+	if (client == 0)
 	{
 		PrintToServer("%s This command cannot be executed by the server console.", MESSAGE_PREFIX_NO_COLOR);
 		return Plugin_Handled;
