@@ -259,6 +259,12 @@ public void OnConfigsExecuted()
 	InsertServerTag("zombie survival 2");
 	InsertServerTag("zs2");
 
+	// Cvars
+	FindConVar("tf_ctf_bonus_time").SetInt(0);
+	FindConVar("tf_flag_caps_per_round").SetInt(2);
+	FindConVar("mp_scrambleteams_auto").SetInt(0);
+	FindConVar("tf_weapon_criticals").SetInt(0);
+
 	// Timers
 	CreateTimer(gcv_timerpoints.FloatValue, Timer_PlaytimePoints, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
@@ -406,6 +412,13 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 		SetVariantInt(TEAM_ZOMBIES);
 		AcceptEntityInput(ent, "SetTeam");
 	}
+	ent = -1;
+	while ((ent = FindEntityByClassname(ent, "func_respawnroomvisualizer")) != -1)
+	{
+		if (GetEntProp(ent, Prop_Send, "m_iTeamNum") == TEAM_SURVIVORS)
+			AcceptEntityInput(ent, "Disable");
+	}
+
 	// Allow all players to move again
 	for (int i = 1; i <= MaxClients; i++)
 	{
@@ -735,15 +748,7 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 			{
 				EmitSoundToClient(victim, "zs2/death.mp3", victim);
 				
-				int survivorsLiving = 0;
-				for (int i = 1; i <= MaxClients; i++)
-				{
-					if (IsValidClient(i) && i != victim)
-					{
-						if (GetClientTeam(i) == TEAM_SURVIVORS)
-							survivorsLiving++;
-					}
-				}
+				int survivorsLiving = GetTeamClientCount(TEAM_SURVIVORS) - 1;
 				DebugText("%i survivors are alive", survivorsLiving);
 				if (survivorsLiving == 1)
 				{
@@ -984,7 +989,7 @@ JSON_Object ReadScript(char[] name)
 		char output[1024];
 		File json = OpenFile(file, "r");
 		json.ReadString(output, sizeof(output));
-		CloseHandle(json);
+		json.Close();
 		return json_decode(output);
 	}
 	return null;
