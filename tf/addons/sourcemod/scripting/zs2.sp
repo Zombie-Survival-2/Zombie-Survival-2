@@ -28,7 +28,7 @@
 // Plugin information
 public Plugin myinfo = {
 	name = "Zombie Survival 2",
-	author = "Jack5 & poonit",
+	author = "Jack5 & yelks",
 	description = "A zombie game mode featuring all-class action with multiple modes, inspired by the Left 4 Dead series.",
 	version = PLUGIN_VERSION,
 	url = "https://github.com/Zombie-Survival-2"
@@ -68,7 +68,7 @@ int iSeconds,
 	TEAM_ZOMBIES = 3,
 	queuePoints[MAXPLAYERS+1],
 	damageDealt[MAXPLAYERS+1];
-GameMod gameMod = Game_Survival;
+GameMod gameMod;
 Handle roundTimer;
 
 // JSON-controlled variables, allowing gamemods should also be included here
@@ -225,8 +225,11 @@ public void OnMapStart()
 		if (serverdata.GetBool("cp_d"))
 			allowedGamemods.PushString("Defend");
 		if (serverdata.GetBool("st_s"))
+		{
 			allowedGamemods.PushString("Survival");
-		if (allowedGamemods.Length <= 1)
+			gameMod = Game_Survival;
+		}
+		else
 			SetDefaultGamemod();
 	}
 	else
@@ -248,7 +251,7 @@ public void OnEntityCreated(int entity, const char[] classname)
 {
 	if (strcmp(classname, "tf_logic_koth") == 0 || strcmp(classname, "tf_logic_arena") == 0)
 		AcceptEntityInput(entity, "KillHierarchy");
-	else if (strcmp(classname, "team_round_timer") == 0)
+	else if (strcmp(classname, "team_round_timer") == 0 && !waitingForPlayers)
 		AcceptEntityInput(entity, "Kill");
 }
 
@@ -260,9 +263,9 @@ public void OnConfigsExecuted()
 	InsertServerTag("zs2");
 
 	// Cvars
+	FindConVar("mp_scrambleteams_auto").SetInt(0);
 	FindConVar("tf_ctf_bonus_time").SetInt(0);
 	FindConVar("tf_flag_caps_per_round").SetInt(2);
-	FindConVar("mp_scrambleteams_auto").SetInt(0);
 	FindConVar("tf_weapon_criticals").SetInt(0);
 
 	// Timers
@@ -427,9 +430,7 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 	}
 	// Check if there are no survivors
 	if (GetTeamClientCount(TEAM_SURVIVORS) == 0)
-	{
 		ForceWin(TEAM_ZOMBIES);
-	}
 }
 
 public Action CountDown(Handle timer)
@@ -529,8 +530,8 @@ void VoteGamemod()
 
 void SetDefaultGamemod()
 {
-	DebugText("Only one round type available, forcing");
-	if (allowedGamemods.Length == 1)
+	DebugText("Forcing round type without vote");
+	if (allowedGamemods.Length >= 1)
 	{
 		char strval[32];
 		allowedGamemods.GetString(0, strval, sizeof(strval));
