@@ -1,6 +1,6 @@
 {
 	"t_setup": 30,
-	"t_round": 390,
+	"t_round": 300,
 	"donotfreeze": false,
 
 	"cp_d": true,

@@ -1,7 +1,7 @@
 {
-	"t_setup": 35,
-	"t_round": 300,
-	"donotfreeze": true,
+	"t_setup": 45,
+	"t_round": 390,
+	"donotfreeze": false,
 
 	"cp_d": true,
 	"cp_intro": "zs2/intro_cp/bloodharvest.mp3",
