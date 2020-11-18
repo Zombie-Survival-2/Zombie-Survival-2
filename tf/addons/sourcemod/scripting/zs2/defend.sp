@@ -2,7 +2,6 @@ public void Defend_RoundStart()
 {
 	CP_IntroMusic();
 	CP_EnableObjectives();
-	gameMod = Game_Defend;
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (IsValidClient(i))
@@ -31,10 +30,10 @@ void CP_EnableObjectives()
 {
 	int ent = -1;
 	
-	for (int i = 0; i < sizeof(captures); i++)
+	for (int i = 0; i < sizeof(objectiveEntities); i++)
 	{
 		char classname[32];
-		while ((ent = FindEntityByClassname(ent, captures[i])) != -1)
+		while ((ent = FindEntityByClassname(ent, objectiveEntities[i])) != -1)
 		{
 			AcceptEntityInput(ent, "Enable");
 			GetEdictClassname(ent, classname, sizeof(classname));

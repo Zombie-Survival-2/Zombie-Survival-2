@@ -2,7 +2,6 @@ public void Survival_RoundStart()
 {
 	ST_IntroMusic();
 	ST_DisableObjectives();
-	gameMod = Game_Survival;
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (IsValidClient(i))
@@ -31,9 +30,9 @@ void ST_DisableObjectives()
 {
 	int ent = -1;
 	
-	for (int i = 0; i < sizeof(captures); i++)
+	for (int i = 0; i < sizeof(objectiveEntities); i++)
 	{
-		while ((ent = FindEntityByClassname(ent, captures[i])) != -1)
+		while ((ent = FindEntityByClassname(ent, objectiveEntities[i])) != -1)
 			AcceptEntityInput(ent, "Disable");
 	}
 }
