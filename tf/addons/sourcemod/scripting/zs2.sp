@@ -123,9 +123,10 @@ public void OnPluginStart()
 	HookEvent("teamplay_round_start", Event_RoundStart);
 	HookEvent("teamplay_round_win", Event_RoundEnd);
 	HookEvent("teamplay_setup_finished", Event_SetupFinished);
+	HookEvent("building_healed", Event_BuildingHealed);
 
 	// ConVars
-	smDebug = CreateConVar("sm_zs2_debug", "0", "Disables or enables debug messages in chat.");
+	smDebug = CreateConVar("sm_zs2_debug", "1", "Disables or enables debug messages in chat.");
 	smPointsDamage = CreateConVar("sm_zs2_points_damage", "200", "Minimum damage to earn queue points.", _, true, 0.0);
 	smPointsOnAssist = CreateConVar("sm_zs2_points_onassist", "3", "X points when zombie assists.", _, true, 0.0);
 	smPointsOnKill = CreateConVar("sm_zs2_points_onkill", "5", "X points when zombie kills.", _, true, 0.1);
@@ -820,15 +821,11 @@ Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 	if (!player)
 		return Plugin_Continue;
 
-	if (GetClientTeam(player) == TEAM_ZOMBIES)
+	int team = GetClientTeam(player);
+	if (team == TEAM_ZOMBIES)
 	{		
 		RequestFrame(OnlyMelee, player);
 		RequestFrame(RemoveWearable, player);
-	}
-	else if(!IsAllowedClass(TF2_GetPlayerClass(player))) // player is on team_survivor
-	{
-		PickClass(player);
-		return Plugin_Continue;
 	}
 
 	if(TF2_GetPlayerClass(player) == TFClass_Scout)
@@ -939,6 +936,14 @@ Action Event_UpgradedObject(Event event, const char[] name, bool dontBroadcast)
 		SetEntProp(ent, Prop_Send, "m_iUpgradeLevel", 0);
 	}
 	
+	return Plugin_Continue;
+}
+
+Action Event_BuildingHealed(Event event, const char[] name, bool dontBroadcast)
+{
+	int healer = GetEventInt(event, "healer");
+	if(IsValidClient(healer) && GetClientTeam(healer) == TEAM_SURVIVORS && GetEventInt(event, "building") == view_as<int>(TFObject_Sentry))
+		return Plugin_Handled;
 	return Plugin_Continue;
 }
 
@@ -1128,19 +1133,6 @@ bool IsAllowedClass(const TFClassType class)
 	}
 
 	return true;
-}
-
-void PickClass(const int client)
-{
-	for (int i = 1; i < 10; i++)
-	{
-		if (IsAllowedClass(view_as<TFClassType>(i)))
-		{
-			TF2_SetPlayerClass(client, view_as<TFClassType>(i));
-			TF2_RespawnPlayer(client);
-			break;
-		}
-	}
 }
 
 void ForceWin(int team)
