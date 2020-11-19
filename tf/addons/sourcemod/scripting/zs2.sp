@@ -417,15 +417,14 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 	// Notify players of their selected team and alter their loadout and movement if necessary
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsValidClient(i) && !selectedAsSurvivor[i])
+		if (IsValidClient(i))
 		{
-			Zombie_Setup(i);
-			CPrintToChat(i, "%s {haunted}You have been selected to become a {normal}Zombie.", MESSAGE_PREFIX);
-		}
-		
-		if (GetClientTeam(i) == 3)
-		{
-			if (freezeInSetup)
+			if (!selectedAsSurvivor[i])
+			{
+				Zombie_Setup(i);
+				CPrintToChat(i, "%s {haunted}You have been selected to become a {normal}Zombie.", MESSAGE_PREFIX);
+			}
+			if (GetClientTeam(i) == 3 && freezeInSetup)
 				SetEntityMoveType(i, MOVETYPE_NONE);
 			else
 				SetEntityMoveType(i, MOVETYPE_WALK);
