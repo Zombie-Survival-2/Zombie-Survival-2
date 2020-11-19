@@ -430,6 +430,17 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 				SetEntityMoveType(i, MOVETYPE_WALK);
 		}
 	}
+	
+	// Dynamically call methods based on current mode
+	switch (roundType)
+	{
+		case Game_Attack:
+			Attack_RoundStartPost();
+		case Game_Defend:
+			Defend_RoundStartPost();
+		case Game_Survival:
+			Survival_RoundStartPost();
+	}
 
 	roundStarted = true;
 }

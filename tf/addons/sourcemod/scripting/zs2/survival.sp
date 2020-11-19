@@ -5,6 +5,10 @@ public void Survival_RoundStart()
 
 	ST_IntroMusic();
 	ST_DisableObjectives();
+}
+
+public void Survival_RoundStartPost()
+{
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (IsValidClient(i))

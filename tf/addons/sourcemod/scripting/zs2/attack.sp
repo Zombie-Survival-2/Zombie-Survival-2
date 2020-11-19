@@ -13,6 +13,10 @@ public void Attack_RoundStart()
 
 	CP_IntroMusic();
 	CP_SetupObjectives();
+}
+
+public void Attack_RoundStartPost()
+{
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (IsValidClient(i))
