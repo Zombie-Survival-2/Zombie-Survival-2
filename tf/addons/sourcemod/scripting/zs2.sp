@@ -333,6 +333,7 @@ public void OnClientPutInServer(int client)
 {
 	firstConnection[client] = true;
 	SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
+	SDKHook(client, SDKHook_WeaponSwitch, OnWeaponSwitch);
 }
 
 public void OnClientDisconnect(int client)
@@ -766,6 +767,48 @@ Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, in
 	return Plugin_Continue;
 }
 
+Action OnWeaponSwitch(int client, int weapon)
+{
+	if(!IsValidClient(client) || GetClientTeam(client) != TEAM_SURVIVORS || TF2_GetPlayerClass(client) != TFClass_Engineer 
+	|| !IsValidEntity(GetPlayerWeaponSlot(client, 3)) || !IsValidEntity(GetPlayerWeaponSlot(client, 4)) || !IsValidEntity(weapon)) 
+	{
+		return Plugin_Continue;
+	}
+
+	if(GetPlayerWeaponSlot(client, 3) == weapon)
+	{
+		int ent = -1, dispenserCount = 0;
+		while ((ent = FindEntityByClassname(ent, "obj_dispenser")) != -1)
+		{
+			if(GetEntPropEnt(ent, Prop_Send, "m_hBuilder") != client) 
+				continue;
+
+			dispenserCount++;
+			SetEntProp(ent, Prop_Send, "m_iObjectType", TFObject_Sapper);
+			if(dispenserCount >= 2) 
+			{
+				//if the limit is reached, disallow building
+				SetEntProp(ent, Prop_Send, "m_iObjectType", TFObject_Dispenser);
+			}
+		}
+	}
+	else if(GetPlayerWeaponSlot(client, 4) == weapon)
+	{
+		int ent = -1;
+		while ((ent = FindEntityByClassname(ent, "obj_dispenser")) != -1)
+		{
+			if(GetEntPropEnt(ent, Prop_Send, "m_hBuilder") != client) 
+				continue;
+
+			SetEntProp(ent, Prop_Send, "m_iObjectType", TFObject_Dispenser);
+		}
+	}
+
+	return Plugin_Continue;
+
+}
+
+
 /* Client events
 ==================================================================================================== */
 
@@ -1083,7 +1126,10 @@ void ForceWin(int team)
 	{
 		ent = CreateEntityByName("game_round_win");
 		if (!IsValidEntity(ent))
+		{
+			PrintToServer("[ZS2] ForceWin did not spawn properly.");
 			return;
+		}
 	}
 	DispatchKeyValue(ent, "force_map_reset", "1");
 	DispatchSpawn(ent);
