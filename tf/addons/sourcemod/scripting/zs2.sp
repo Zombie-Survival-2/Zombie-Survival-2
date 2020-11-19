@@ -47,8 +47,8 @@ bool setupTime,
 	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
 int roundTimer,
-	TEAM_SURVIVORS = 2,
-	TEAM_ZOMBIES = 3,
+	TEAM_SURVIVORS,
+	TEAM_ZOMBIES,
 	queuePoints[MAXPLAYERS+1],
 	damageDealt[MAXPLAYERS+1];
 public const char objectiveEntities[6][32] = {
@@ -115,17 +115,17 @@ public void OnPluginStart()
 	}
 
 	// Events
+	HookEvent("building_healed", Event_OnHealBuilding);
+	HookEvent("ctf_flag_captured", Event_OnCapture);
 	HookEvent("player_death", Event_OnDeath);
 	HookEvent("player_spawn", Event_OnSpawn);
-	HookEvent("player_upgradedobject", Event_UpgradedObject);
-	HookEvent("post_inventory_application", Event_PlayerRegen);
+	HookEvent("player_upgradedobject", Event_OnUpgradeBuilding);
+	HookEvent("post_inventory_application", Event_OnRegen);
 	HookEvent("teamplay_broadcast_audio", Event_Audio, EventHookMode_Pre);
-	HookEvent("teamplay_point_captured", Event_Capture);
-	HookEvent("ctf_flag_captured", Event_Capture);
+	HookEvent("teamplay_point_captured", Event_OnCapture);
 	HookEvent("teamplay_round_start", Event_RoundStart);
 	HookEvent("teamplay_round_win", Event_RoundEnd);
 	HookEvent("teamplay_setup_finished", Event_SetupFinished);
-	HookEvent("building_healed", Event_BuildingHealed);
 
 	// ConVars
 	smDebug = CreateConVar("sm_zs2_debug", "1", "Disables or enables debug messages in chat.");
@@ -206,8 +206,8 @@ public void OnMapStart()
 	PrecacheSound("zs2/intro_st/swampfever.mp3");
 	AddFileToDownloadsTable("sound/zs2/intro_st/swampfever.mp3");
 	
-	TEAM_SURVIVORS = 2;
-	TEAM_ZOMBIES = 3;
+	TEAM_SURVIVORS = TEAM_RED;
+	TEAM_ZOMBIES = TEAM_BLUE;
 	delete roundTimerHandle;
 	
 	// Read JSON file and set related variables
@@ -215,7 +215,6 @@ public void OnMapStart()
 	GetCurrentMap(mapName, sizeof(mapName));
 	char mapScriptPath[128];
 	Format(mapScriptPath, sizeof(mapScriptPath), "scripts/zs2/%s.json", mapName);
-	DebugText("There are currently %i possible round types", sizeof(roundTypeStrings));
 	allowedRoundTypes = new ArrayList(ByteCountToCells(16));
 	if (FileExists(mapScriptPath))
 	{
@@ -441,7 +440,6 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 		}
 	}
 	
-	// Dynamically call methods based on current mode
 	switch (roundType)
 	{
 		case Game_Attack:
@@ -471,7 +469,7 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 		AcceptEntityInput(ent, "SetTeam");
 	}
 	ent = -1;
-	while ((ent = FindEntityByClassname(ent, "func_respawnroomvisualizer")) != -1)
+	while ((ent = FindEntityByClassname(ent, "func_respawnroom")) != -1 || (ent = FindEntityByClassname(ent, "func_respawnroomvisualizer")) != -1)
 	{
 		if (GetEntProp(ent, Prop_Send, "m_iTeamNum") == TEAM_SURVIVORS)
 			AcceptEntityInput(ent, "Disable");
@@ -483,15 +481,10 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 		if (IsValidClient(i))
 			SetEntityMoveType(i, MOVETYPE_WALK);
 	}
+	
 	// Check if there are no survivors
 	if (GetTeamClientCount(TEAM_SURVIVORS) == 0)
 		ForceWin(TEAM_ZOMBIES);
-}
-
-void Event_Capture(Event event, const char[] name, bool dontBroadcast)
-{
-	roundTimer += 30;
-	DebugText("Event_Capture is called");
 }
 
 public Action CountdownSetup(Handle timer)
@@ -568,6 +561,12 @@ public Action CountdownRound(Handle timer)
 	}
 
 	return Plugin_Continue;
+}
+
+void Event_OnCapture(Event event, const char[] name, bool dontBroadcast)
+{
+	DebugText("An objective has been captured");
+	roundTimer += 30;
 }
 
 void VoteRoundType()
@@ -773,35 +772,34 @@ Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, in
 
 Action OnWeaponSwitch(int client, int weapon) // TODO: Use build and destroy events instead of weapon switch detection
 {
-	if(!IsValidClient(client) || GetClientTeam(client) != TEAM_SURVIVORS || TF2_GetPlayerClass(client) != TFClass_Engineer 
-	|| !IsValidEntity(GetPlayerWeaponSlot(client, 3)) || !IsValidEntity(GetPlayerWeaponSlot(client, 4)) || !IsValidEntity(weapon)) 
+	if (!IsValidClient(client) || GetClientTeam(client) == TEAM_ZOMBIES || TF2_GetPlayerClass(client) != TFClass_Engineer || !IsValidEntity(weapon))
 	{
 		return Plugin_Continue;
 	}
 
-	if(GetPlayerWeaponSlot(client, 3) == weapon)
+	if (GetPlayerWeaponSlot(client, 3) == weapon)
 	{
 		int ent = -1, dispenserCount = 0;
 		while ((ent = FindEntityByClassname(ent, "obj_dispenser")) != -1)
 		{
-			if(GetEntPropEnt(ent, Prop_Send, "m_hBuilder") != client) 
+			if (GetEntPropEnt(ent, Prop_Send, "m_hBuilder") != client) 
 				continue;
 
 			dispenserCount++;
 			SetEntProp(ent, Prop_Send, "m_iObjectType", TFObject_Sapper);
-			if(dispenserCount >= 2) 
+			if (dispenserCount >= 2)
 			{
-				//if the limit is reached, disallow building
+				// Do not allow building if the limit is reached
 				SetEntProp(ent, Prop_Send, "m_iObjectType", TFObject_Dispenser);
 			}
 		}
 	}
-	else if(GetPlayerWeaponSlot(client, 4) == weapon)
+	else if (GetPlayerWeaponSlot(client, 4) == weapon)
 	{
 		int ent = -1;
 		while ((ent = FindEntityByClassname(ent, "obj_dispenser")) != -1)
 		{
-			if(GetEntPropEnt(ent, Prop_Send, "m_hBuilder") != client) 
+			if (GetEntPropEnt(ent, Prop_Send, "m_hBuilder") != client)
 				continue;
 
 			SetEntProp(ent, Prop_Send, "m_iObjectType", TFObject_Dispenser);
@@ -821,14 +819,14 @@ Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 	if (!player)
 		return Plugin_Continue;
 
-	int team = GetClientTeam(player);
-	if (team == TEAM_ZOMBIES)
+	if (GetClientTeam(player) == TEAM_ZOMBIES)
 	{		
 		RequestFrame(OnlyMelee, player);
 		RequestFrame(RemoveWearable, player);
 	}
 
-	if(TF2_GetPlayerClass(player) == TFClass_Scout)
+	// Apply slow move speed attributes to Scouts
+	if (TF2_GetPlayerClass(player) == TFClass_Scout)
 	{
 		TF2Attrib_SetByName(player, "major move speed bonus", 0.8);
 		TF2_AddCondition(player, TFCond_SpeedBuffAlly, 0.001);
@@ -837,13 +835,13 @@ Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 	return Plugin_Continue;
 }
 
-Action Event_PlayerRegen(Event event, const char[] name, bool dontBroadcast)
+Action Event_OnRegen(Event event, const char[] name, bool dontBroadcast)
 {
 	int player = GetClientOfUserId(event.GetInt("userid"));
 	if (!player)
 		return Plugin_Continue;
-
 	int team = GetClientTeam(player);
+	
 	if (team == TEAM_ZOMBIES)
 	{
 		RequestFrame(OnlyMelee, player);
@@ -927,25 +925,24 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 	return Plugin_Continue;
 }
 
-Action Event_UpgradedObject(Event event, const char[] name, bool dontBroadcast)
+Action Event_OnUpgradeBuilding(Event event, const char[] name, bool dontBroadcast)
 {
 	int ent = GetEventInt(event, "index");
 	char classname[32];
 	GetEdictClassname(ent, classname, sizeof(classname));
 
 	if (StrEqual(classname, "obj_sentrygun"))
-	{
 		SetEntProp(ent, Prop_Send, "m_iUpgradeLevel", 0);
-	}
 	
 	return Plugin_Continue;
 }
 
-Action Event_BuildingHealed(Event event, const char[] name, bool dontBroadcast)
+Action Event_OnHealBuilding(Event event, const char[] name, bool dontBroadcast)
 {
 	int healer = GetEventInt(event, "healer");
-	if(IsValidClient(healer) && GetClientTeam(healer) == TEAM_SURVIVORS && GetEventInt(event, "building") == view_as<int>(TFObject_Sentry))
+	if (IsValidClient(healer) && GetClientTeam(healer) == TEAM_SURVIVORS && GetEventInt(event, "building") == view_as<int>(TFObject_Sentry))
 		return Plugin_Handled;
+	
 	return Plugin_Continue;
 }
 
@@ -987,7 +984,7 @@ void OnlyMelee(int client)
 		TF2_RemoveWeaponSlot(client, 3);
 		TF2_RemoveWeaponSlot(client, 4);
 	}
-	if(class != TFClass_Engineer)
+	if (class != TFClass_Engineer)
 	{
 		TF2_RemoveWeaponSlot(client, 5);
 	}
@@ -1000,7 +997,8 @@ void RemoveWearable(int client)
 	int i = -1;
 	while ((i = FindEntityByClassname(i, "tf_wearable_demoshield")) != -1)
 	{
-		if (client != GetEntPropEnt(i, Prop_Send, "m_hOwnerEntity")) continue;
+		if (client != GetEntPropEnt(i, Prop_Send, "m_hOwnerEntity")) 
+			continue;
 		AcceptEntityInput(i, "Kill");
 	}
 }
@@ -1087,7 +1085,9 @@ Action Timer_CalcQueuePoints(Handle timer)
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (IsValidClient(i) && damageDealt[i] >= smPointsDamage.IntValue)
+		{
 			queuePoints[i] += 10;
+		}
 	}
 }
 
@@ -1098,7 +1098,10 @@ Action Timer_PlaytimePoints(Handle timer)
 		for (int i = 1; i <= MaxClients; i++)
 		{
 			if (IsValidClient(i) && GetClientTeam(i) == TEAM_ZOMBIES)
+			{
 				queuePoints[i] += smPointsWhilePlaying.IntValue;
+				CPrintToChat(i, "%s {haunted}You have earned %i queue points for playing as a zombie.", MESSAGE_PREFIX, smPointsWhilePlaying.IntValue);
+			}
 		}
 	}
 	return Plugin_Continue;
@@ -1107,7 +1110,7 @@ Action Timer_PlaytimePoints(Handle timer)
 /* Queue points checking
 ==================================================================================================== */
 
-int GetClientWithMostQueuePoints(bool[] myArray, bool mark=true)
+int GetClientWithMostQueuePoints(bool[] myArray, bool mark = true)
 {
 	int chosen = 0;
 	
@@ -1147,7 +1150,7 @@ void ForceWin(int team)
 		ent = CreateEntityByName("game_round_win");
 		if (!IsValidEntity(ent))
 		{
-			PrintToServer("[ZS2] ForceWin did not spawn properly.");
+			PrintToServer("%s Plugin was not able to force a team to win.", MESSAGE_PREFIX_NO_COLOR);
 			return;
 		}
 	}

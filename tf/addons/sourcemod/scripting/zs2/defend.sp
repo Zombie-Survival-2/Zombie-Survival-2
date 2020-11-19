@@ -1,7 +1,7 @@
 public void Defend_RoundStart()
 {
-	TEAM_SURVIVORS = 2;
-	TEAM_ZOMBIES = 3;
+	TEAM_SURVIVORS = TEAM_RED;
+	TEAM_ZOMBIES = TEAM_BLUE;
 
 	CP_IntroMusic();
 	CP_SetupObjectives();
