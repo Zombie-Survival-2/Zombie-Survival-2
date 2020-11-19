@@ -2,10 +2,12 @@
 	"t_setup": 35,
 	"t_round": 300,
 	"donotfreeze": false,
-
+	
+	"cp_a": true,
+	"cp_a_donotswap": true,
 	"cp_d": true,
 	"cp_intro": "zs2/intro_cp/crashcourse.mp3",
-
+	
 	"st_s": true,
 	"st_intro": "zs2/intro_st/swampfever.mp3"
 }

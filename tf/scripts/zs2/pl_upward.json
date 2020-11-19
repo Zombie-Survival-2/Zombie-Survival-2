@@ -6,6 +6,7 @@
 	"tank": "zs2/tank/tank1_22050.wav",
 	
 	"cp_a": true,
+	"cp_a_donotswap": false,
 	"cp_d": true,
 	"cp_intro": "zs2/intro_cp/bloodharvest.mp3",
 	"cp_last": "zs2/last/attacklast_m.wav",
