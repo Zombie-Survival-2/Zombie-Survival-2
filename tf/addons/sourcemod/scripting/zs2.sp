@@ -6,6 +6,7 @@
 #include <sdkhooks>
 #include <sdktools>
 #include <tf2_stocks>
+#include <tf2attributes>
 #include <advanced_motd>
 #include <json>
 #include <morecolors>
@@ -507,6 +508,8 @@ public Action CountdownSetup(Handle timer)
 			AcceptEntityInput(ent, "Open");
 			AcceptEntityInput(ent, "Lock");
 		}
+
+		/* spams console with Dynamic prop gate_2_prop: no sequence named:open, Dynamic prop gate_3_prop: no sequence named:open
 		ent = -1;
 		while ((ent = FindEntityByClassname(ent, "prop_dynamic")) != -1)
 		{
@@ -517,7 +520,7 @@ public Action CountdownSetup(Handle timer)
 				SetVariantString("open");
 				AcceptEntityInput(ent, "SetAnimation");
 			}
-		}
+		}*/
 		ent = -1;
 		while ((ent = FindEntityByClassname(ent, "trigger_multiple")) != -1)
 		{
@@ -822,6 +825,12 @@ Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 	{		
 		RequestFrame(OnlyMelee, player);
 		RequestFrame(RemoveWearable, player);
+	}
+
+	if(TF2_GetPlayerClass(player) == TFClass_Scout)
+	{
+		TF2Attrib_SetByName(player, "major move speed bonus", 0.8);
+		TF2_AddCondition(player, TFCond_SpeedBuffAlly, 0.001);
 	}
 
 	return Plugin_Continue;
