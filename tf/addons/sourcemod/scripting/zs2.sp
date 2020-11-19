@@ -1,12 +1,10 @@
 /* Includes
 ==================================================================================================== */
-
 #pragma semicolon 1
 
 #include <sourcemod>
 #include <sdkhooks>
 #include <sdktools>
-#include <tf2>
 #include <tf2_stocks>
 #include <advanced_motd>
 #include <json>
@@ -21,7 +19,7 @@
 // Defines
 #define MESSAGE_PREFIX "{collectors}[ZS2]"
 #define MESSAGE_PREFIX_NO_COLOR "[ZS2]"
-#define PLUGIN_VERSION "0.1"
+#define PLUGIN_VERSION "0.1.1 Beta"
 #define MOTD_VERSION "0.1"
 #define IsValidClient(%1) (1 <= %1 <= MaxClients && IsClientInGame(%1))
 
@@ -35,6 +33,11 @@ public Plugin myinfo = {
 };
 
 // Standard variables
+enum 
+{
+	TEAM_RED = 2,
+	TEAM_BLUE = 3
+};
 bool setupTime,
 	roundStarted,
 	waitingForPlayers,
@@ -58,14 +61,14 @@ Handle roundTimerHandle;
 // Round type variables
 enum RoundType
 {
-	// Game_Attack,
+	Game_Attack,
 	Game_Defend,
 	Game_Survival
 	// Game_Waves,
 	// Game_Scavenge
 };
-public const char roundTypeStrings[2][] = {
-	// "Attack",
+public const char roundTypeStrings[3][] = {
+	"Attack",
 	"Defend",
 	"Survival"
 	// "Waves",
@@ -74,7 +77,8 @@ public const char roundTypeStrings[2][] = {
 RoundType roundType;
 
 // JSON-controlled variables
-bool freezeInSetup;
+bool freezeInSetup,
+	attackTeamSwap;
 int roundDuration,
 	setupDuration;
 char introCP[64],
@@ -92,6 +96,8 @@ ConVar smDebug,
 	smPointsOnAssist;
 
 // Method includes
+#include "zs2/cp.sp"
+#include "zs2/attack.sp"
 #include "zs2/defend.sp"
 #include "zs2/survival.sp"
 
@@ -108,8 +114,11 @@ public void OnPluginStart()
 	// Events
 	HookEvent("player_death", Event_OnDeath);
 	HookEvent("player_spawn", Event_OnSpawn);
+	HookEvent("player_upgradedobject", Event_UpgradedObject);
 	HookEvent("post_inventory_application", Event_PlayerRegen);
 	HookEvent("teamplay_broadcast_audio", Event_Audio, EventHookMode_Pre);
+	HookEvent("teamplay_point_captured", Event_Capture);
+	HookEvent("ctf_flag_captured", Event_Capture);
 	HookEvent("teamplay_round_start", Event_RoundStart);
 	HookEvent("teamplay_round_win", Event_RoundEnd);
 	HookEvent("teamplay_setup_finished", Event_SetupFinished);
@@ -119,7 +128,7 @@ public void OnPluginStart()
 	smPointsDamage = CreateConVar("sm_zs2_points_damage", "200", "Minimum damage to earn queue points.", _, true, 0.0);
 	smPointsOnAssist = CreateConVar("sm_zs2_points_onassist", "3", "X points when zombie assists.", _, true, 0.0);
 	smPointsOnKill = CreateConVar("sm_zs2_points_onkill", "5", "X points when zombie kills.", _, true, 0.1);
-	smPointsTime = CreateConVar("sm_zs2_points_time", "30.0", "Time interval for giving queue points.", _, true, 0.0);
+	smPointsTime = CreateConVar("sm_zs2_points_time", "30", "Time interval for giving queue points.", _, true, 0.0);
 	smPointsWhilePlaying = CreateConVar("sm_zs2_points_whileplaying", "5", "X points for playing on the server.", _, true, 0.0);
 	smTeamMax = CreateConVar("sm_zs2_team_max", "6", "Maximum number of survivors allowed.", _, true, 0.0);
 	smTeamRatio = CreateConVar("sm_zs2_team_ratio", "3", "Number of zombies per survivor.", _, true, 0.0, true, 1.0);
@@ -193,12 +202,17 @@ public void OnMapStart()
 	PrecacheSound("zs2/intro_st/swampfever.mp3");
 	AddFileToDownloadsTable("sound/zs2/intro_st/swampfever.mp3");
 	
+	TEAM_SURVIVORS = 2;
+	TEAM_ZOMBIES = 3;
+	delete roundTimerHandle;
+	
 	// Read JSON file and set related variables
 	char mapName[64];
 	GetCurrentMap(mapName, sizeof(mapName));
 	char mapScriptPath[128];
 	Format(mapScriptPath, sizeof(mapScriptPath), "scripts/zs2/%s.json", mapName);
-	allowedRoundTypes = new ArrayList(16, 2); // Increase with each added round type
+	DebugText("There are currently %i possible round types", sizeof(roundTypeStrings));
+	allowedRoundTypes = new ArrayList(ByteCountToCells(16));
 	if (FileExists(mapScriptPath))
 	{
 		DebugText("JSON file found");
@@ -207,7 +221,9 @@ public void OnMapStart()
 		mapScriptFile.ReadString(mapScriptText, sizeof(mapScriptText));
 		mapScriptFile.Close();
 		JSON_Object mapScript = json_decode(mapScriptText);
-		freezeInSetup = !mapScript.GetBool("donotfreeze"); // Reversed because default is false
+		// Booleans reversed because default is false
+		freezeInSetup = !mapScript.GetBool("donotfreeze");
+		attackTeamSwap = !mapScript.GetBool("cp_a_donotswap");
 		int intval = mapScript.GetInt("t_round");
 		if (intval > 0)
 			roundDuration = intval;
@@ -234,6 +250,8 @@ public void OnMapStart()
 			DebugText("No definition for ST intro music found, disabled");
 			introST = "";
 		}
+		if (mapScript.GetBool("cp_a"))
+			allowedRoundTypes.PushString("Attack");
 		if (mapScript.GetBool("cp_d"))
 			allowedRoundTypes.PushString("Defend");
 		if (mapScript.GetBool("st_s"))
@@ -249,6 +267,7 @@ public void OnMapStart()
 	{
 		DebugText("JSON file not found, using defaults");
 		freezeInSetup = true;
+		attackTeamSwap = true;
 		roundDuration = 300;
 		setupDuration = 30;
 		introCP = "";
@@ -276,12 +295,12 @@ public void OnConfigsExecuted()
 
 	// Cvars
 	FindConVar("mp_scrambleteams_auto").SetInt(0);
+	FindConVar("mp_teams_unbalance_limit").SetInt(0);
+	FindConVar("tf_avoidteammates_pushaway").SetInt(0);
+	FindConVar("tf_bot_melee_only").SetInt(1);
 	FindConVar("tf_ctf_bonus_time").SetInt(0);
 	FindConVar("tf_flag_caps_per_round").SetInt(2);
 	FindConVar("tf_weapon_criticals").SetInt(0);
-
-	// Timers
-	CreateTimer(smPointsTime.FloatValue, Timer_PlaytimePoints, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
 
 void InsertServerTag(const char[] tagToInsert)
@@ -343,12 +362,26 @@ public void TF2_OnWaitingForPlayersStart()
 public void TF2_OnWaitingForPlayersEnd()
 {
 	waitingForPlayers = false;
+	
+	// Playtime points timer
+	CreateTimer(smPointsTime.FloatValue, Timer_PlaytimePoints, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
 
 void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
 	if (waitingForPlayers)
 		return;
+		
+	// Dynamically call methods based on current mode
+	switch (roundType)
+	{
+		case Game_Attack:
+			Attack_RoundStart();
+		case Game_Defend:
+			Defend_RoundStart();
+		case Game_Survival:
+			Survival_RoundStart();
+	}
 
 	setupTime = true;
 	roundTimer = setupDuration;
@@ -383,30 +416,35 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 
 		DebugText("Placing player %i on the survivor team", player);
 		Survivor_Setup(player);
-		CPrintToChat(player, "%s {haunted}You have been selected to become a {normal}Survivor.", MESSAGE_PREFIX);
+		CPrintToChat(player, "%s {haunted}You have been selected to become a {normal}Survivor. {haunted}Your queue points have been reset.", MESSAGE_PREFIX);
 	}
 
 	// Notify players of their selected team and alter their loadout and movement if necessary
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsValidClient(i) && !selectedAsSurvivor[i])
+		if (IsValidClient(i))
 		{
-			Zombie_Setup(i);
-			if (freezeInSetup)
+			if (!selectedAsSurvivor[i])
+			{
+				Zombie_Setup(i);
+				CPrintToChat(i, "%s {haunted}You have been selected to become a {normal}Zombie.", MESSAGE_PREFIX);
+			}
+			if (GetClientTeam(i) == TEAM_BLUE && freezeInSetup)
 				SetEntityMoveType(i, MOVETYPE_NONE);
 			else
 				SetEntityMoveType(i, MOVETYPE_WALK);
-			CPrintToChat(i, "%s {haunted}You have been selected to become a {normal}Zombie.", MESSAGE_PREFIX);
 		}
 	}
-
+	
 	// Dynamically call methods based on current mode
 	switch (roundType)
 	{
+		case Game_Attack:
+			Attack_RoundStartPost();
 		case Game_Defend:
-			Defend_RoundStart();
+			Defend_RoundStartPost();
 		case Game_Survival:
-			Survival_RoundStart();
+			Survival_RoundStartPost();
 	}
 
 	roundStarted = true;
@@ -443,6 +481,12 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 	// Check if there are no survivors
 	if (GetTeamClientCount(TEAM_SURVIVORS) == 0)
 		ForceWin(TEAM_ZOMBIES);
+}
+
+void Event_Capture(Event event, const char[] name, bool dontBroadcast)
+{
+	roundTimer += 30;
+	DebugText("Event_Capture is called");
 }
 
 public Action CountdownSetup(Handle timer)
@@ -501,7 +545,11 @@ public Action CountdownRound(Handle timer)
 		roundTimerHandle = null;
 		switch (roundType)
 		{
-			case Game_Defend, Game_Survival:
+			case Game_Attack:
+				ForceWin(TEAM_ZOMBIES);
+			case Game_Defend:
+				ForceWin(TEAM_SURVIVORS);
+			case Game_Survival:
 				ForceWin(TEAM_SURVIVORS);
 		}
 		return Plugin_Stop;
@@ -531,10 +579,13 @@ void VoteRoundType()
 		vote.Initiator = NATIVEVOTES_SERVER_INDEX;
 		vote.SetDetails("Select next round type:");
 		char votePosition[2];
-		for (int i = 0; i < 2; i++)
+		char strval[32];
+		for (int i = 0; i < allowedRoundTypes.Length; i++) // This portion of the code is currently broken
 		{
 			IntToString(i, votePosition, sizeof(votePosition));
-			vote.AddItem(votePosition, roundTypeStrings[i]);
+			allowedRoundTypes.GetString(i, strval, sizeof(strval));
+			DebugText("Adding item %s to position %s", strval, votePosition);
+			vote.AddItem(votePosition, strval);
 		}
 		vote.DisplayVoteToAll(13);
 	}
@@ -547,7 +598,9 @@ void SetDefaultRoundType()
 	{
 		char strval[32];
 		allowedRoundTypes.GetString(0, strval, sizeof(strval));
-		if (StrEqual(strval, "Defend"))
+		if (StrEqual(strval, "Attack"))
+			roundType = Game_Attack;
+		else if (StrEqual(strval, "Defend"))
 			roundType = Game_Defend;
 		else
 			roundType = Game_Survival;
@@ -584,9 +637,17 @@ public int GameVote(NativeVote vote, MenuAction action, int param1, int param2)
 			int i = StringToInt(votePosition);
 			int votes, totalVotes;
 			NativeVotes_GetInfo(param2, votes, totalVotes);
-			vote.DisplayPassCustom("Round type set to %s", roundTypeStrings[i], votes, totalVotes);
-			CPrintToChatAll("%s {haunted}The next round type will be {normal}%s {haunted}(%d/%d).", MESSAGE_PREFIX, roundTypeStrings[i], votes, totalVotes);
-			roundType = view_as<RoundType>(i);
+			char strval[32];
+			allowedRoundTypes.GetString(i, strval, sizeof(strval));
+			vote.DisplayPassCustom("Round type set to %s", strval);
+			CPrintToChatAll("%s {haunted}The next round type will be {normal}%s {haunted}(%d/%d).", MESSAGE_PREFIX, strval, votes, totalVotes);
+			int j = 0;
+			for ( ; j < sizeof(roundTypeStrings); j++)
+			{
+				if (StrEqual(roundTypeStrings[j], strval))
+					break;
+			}
+			roundType = view_as<RoundType>(j);
 		}
 	}
 }
@@ -642,6 +703,12 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 		return Plugin_Continue;
 
 	if (StrContains(chosenTeam, "spec", false) > -1)
+	{
+		EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
+		return Plugin_Handled;
+	}
+	
+	if (StrContains(chosenTeam, "red", false) > -1 && roundStarted)
 	{
 		EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 		return Plugin_Handled;
@@ -723,17 +790,19 @@ Action Event_PlayerRegen(Event event, const char[] name, bool dontBroadcast)
 	if (!player)
 		return Plugin_Continue;
 
-	if (GetClientTeam(player) == TEAM_ZOMBIES)
+	int team = GetClientTeam(player);
+	if (team == TEAM_ZOMBIES)
 	{
-		OnlyMelee(player);
-		RemoveWearable(player);
-		if (setupTime)
-		{
-			if (freezeInSetup)
-				SetEntityMoveType(player, MOVETYPE_NONE);
-			else
-				SetEntityMoveType(player, MOVETYPE_WALK);
-		}
+		RequestFrame(OnlyMelee, player);
+		RequestFrame(RemoveWearable, player);
+	}
+	
+	if (team == TEAM_BLUE && setupTime)
+	{
+		if (freezeInSetup)
+			SetEntityMoveType(player, MOVETYPE_NONE);
+		else
+			SetEntityMoveType(player, MOVETYPE_WALK);
 	}
 
 	return Plugin_Continue;
@@ -763,7 +832,6 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 			if (survivorsLiving >= 1)
 			{
 				RequestFrame(Zombie_Setup, victim);
-				DebugText("%N was swapped to blue", victim);
 				if (survivorsLiving == 1)
 				{
 					DebugText("Playing one left music");
@@ -777,7 +845,6 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 			}
 			else
 			{
-				DebugText("Not swapping %N, there are no alive survivors", victim);
 				ForceWin(TEAM_ZOMBIES);
 			}
 		}
@@ -799,7 +866,23 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 	{
 		if (team == TEAM_SURVIVORS)
 			RequestFrame(Survivor_Setup, victim);
+		else if (team == TEAM_ZOMBIES)
+			RequestFrame(Zombie_Setup, victim);
 	}
+	return Plugin_Continue;
+}
+
+Action Event_UpgradedObject(Event event, const char[] name, bool dontBroadcast)
+{
+	int ent = GetEventInt(event, "index");
+	char classname[32];
+	GetEdictClassname(ent, classname, sizeof(classname));
+
+	if (StrEqual(classname, "obj_sentrygun"))
+	{
+		SetEntProp(ent, Prop_Send, "m_iUpgradeLevel", 0);
+	}
+	
 	return Plugin_Continue;
 }
 
@@ -810,7 +893,7 @@ void Survivor_Setup(const int client)
 {
 	if (GetClientTeam(client) != TEAM_SURVIVORS)
 		ChangeClientTeam(client, TEAM_SURVIVORS);
-
+	queuePoints[client] = 0;
 	TF2_RespawnPlayer(client);
 	TF2_RegeneratePlayer(client);
 	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 0));
@@ -832,24 +915,18 @@ void Zombie_Setup(const int client)
 
 void OnlyMelee(int client)
 {
-	for (int i = 0; i < 6; i++)
-	{
-		if (i == 2)
-			continue;
-		if (i == 3)
-		{
-			if (TF2_GetPlayerClass(client) == TFClass_Engineer || TF2_GetPlayerClass(client) == TFClass_Spy)
-				continue;
-		}
-		if (i == 4)
-		{
-			if (TF2_GetPlayerClass(client) == TFClass_Engineer || TF2_GetPlayerClass(client) == TFClass_Spy)
-				continue;
-		}
-		if (i == 5 && TF2_GetPlayerClass(client) == TFClass_Engineer)
-			continue;
+	TF2_RemoveWeaponSlot(client, 0);
+	TF2_RemoveWeaponSlot(client, 1);
 
-		TF2_RemoveWeaponSlot(client, i);
+	TFClassType class = TF2_GetPlayerClass(client);
+	if (class != TFClass_Engineer && class != TFClass_Spy)
+	{
+		TF2_RemoveWeaponSlot(client, 3);
+		TF2_RemoveWeaponSlot(client, 4);
+	}
+	if(class != TFClass_Engineer)
+	{
+		TF2_RemoveWeaponSlot(client, 5);
 	}
 
 	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 2));
@@ -953,7 +1030,7 @@ Action Timer_CalcQueuePoints(Handle timer)
 
 Action Timer_PlaytimePoints(Handle timer)
 {
-	if (!roundStarted)
+	if (roundStarted)
 	{
 		for (int i = 1; i <= MaxClients; i++)
 		{
