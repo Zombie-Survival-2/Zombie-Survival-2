@@ -1,7 +1,14 @@
 public void Survival_RoundStart()
 {
+	TEAM_SURVIVORS = 2;
+	TEAM_ZOMBIES = 3;
+
 	ST_IntroMusic();
 	ST_DisableObjectives();
+}
+
+public void Survival_RoundStartPost()
+{
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (IsValidClient(i))
@@ -29,7 +36,6 @@ void ST_IntroMusic()
 void ST_DisableObjectives()
 {
 	int ent = -1;
-	
 	for (int i = 0; i < sizeof(objectiveEntities); i++)
 	{
 		while ((ent = FindEntityByClassname(ent, objectiveEntities[i])) != -1)
