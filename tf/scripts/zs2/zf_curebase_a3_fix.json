@@ -8,6 +8,5 @@
 	"cp_d": false,
 	"cp_intro": "zs2/intro_cp/nomercy.mp3"
 	
-	"st_s": true,
-	"st_intro": "zs2/intro_st/nomercy.mp3"
+	"st_s": false
 }

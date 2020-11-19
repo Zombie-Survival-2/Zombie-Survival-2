@@ -1,6 +1,8 @@
 {
 	"t_setup": 35,
 	"t_round": 390,
+	"t_cp_minus": 120,
+	"t_cp_bonus": 60,
 	"donotfreeze": true,
 	"heartbeat": false,
 	"tank": "zs2/tank/tank1_22050.wav",

@@ -80,9 +80,11 @@ public const char roundTypeStrings[3][] = {
 RoundType roundType;
 
 // JSON-controlled variables
-bool freezeInSetup,
-	attackTeamSwap;
-int roundDuration,
+bool attackTeamSwap,
+	freezeInSetup;
+int objectiveBonus,
+	roundDuration,
+	roundDurationCP,
 	setupDuration;
 char introCP[64],
 	introST[64];
@@ -242,6 +244,26 @@ public void OnMapStart()
 		{
 			DebugText("Setup time out of bounds or not found, using default");
 			setupDuration = 30;
+		}
+		intval = mapScript.GetInt("t_cp_minus");
+		if (intval >= 0)
+		{
+			roundDurationCP = roundDuration - intval;
+			if (roundDurationCP < 0)
+				roundDurationCP = 0;
+		}
+		else
+		{
+			DebugText("CP time penalty out of bounds, disabled");
+			roundDurationCP = roundDuration;
+		}
+		intval = mapScript.GetInt("t_cp_bonus");
+		if (intval >= 0)
+			objectiveBonus = intval;
+		else
+		{
+			DebugText("Objective bonus time out of bounds, disabled");
+			objectiveBonus = 0;
 		}
 		if (!mapScript.GetString("cp_intro", introCP, sizeof(introCP)))
 		{
@@ -457,7 +479,17 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 {
 	DebugText("Setup time finished");
 	setupTime = false;
-	roundTimer = roundDuration;
+	
+	switch (roundType)
+	{
+		case Game_Attack:
+			roundTimer = roundDurationCP;
+		case Game_Defend:
+			roundTimer = roundDurationCP;
+		default:
+			roundTimer = roundDuration;
+	}
+	
 	delete roundTimerHandle;
 	roundTimerHandle = CreateTimer(1.0, CountdownRound, _, TIMER_REPEAT);
 
@@ -566,7 +598,7 @@ public Action CountdownRound(Handle timer)
 void Event_OnCapture(Event event, const char[] name, bool dontBroadcast)
 {
 	DebugText("An objective has been captured");
-	roundTimer += 30;
+	roundTimer += objectiveBonus;
 }
 
 void VoteRoundType()
