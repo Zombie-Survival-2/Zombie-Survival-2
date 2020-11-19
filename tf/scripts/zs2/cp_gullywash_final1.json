@@ -2,10 +2,12 @@
 	"t_setup": 45,
 	"t_round": 390,
 	"donotfreeze": false,
-
+	
+	"cp_a": true,
+	"cp_a_donotswap": true,
 	"cp_d": true,
 	"cp_intro": "zs2/intro_cp/bloodharvest.mp3",
-
+	
 	"st_s": true,
 	"st_intro": "zs2/intro_st/bloodharvest.mp3"
 }

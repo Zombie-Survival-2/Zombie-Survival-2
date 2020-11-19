@@ -1,10 +1,12 @@
 /* Includes
 ==================================================================================================== */
+
 #pragma semicolon 1
 
 #include <sourcemod>
 #include <sdkhooks>
 #include <sdktools>
+#include <tf2>
 #include <tf2_stocks>
 #include <tf2attributes>
 #include <advanced_motd>
@@ -509,8 +511,6 @@ public Action CountdownSetup(Handle timer)
 			AcceptEntityInput(ent, "Open");
 			AcceptEntityInput(ent, "Lock");
 		}
-
-		/* spams console with Dynamic prop gate_2_prop: no sequence named:open, Dynamic prop gate_3_prop: no sequence named:open
 		ent = -1;
 		while ((ent = FindEntityByClassname(ent, "prop_dynamic")) != -1)
 		{
@@ -521,7 +521,7 @@ public Action CountdownSetup(Handle timer)
 				SetVariantString("open");
 				AcceptEntityInput(ent, "SetAnimation");
 			}
-		}*/
+		}
 		ent = -1;
 		while ((ent = FindEntityByClassname(ent, "trigger_multiple")) != -1)
 		{
@@ -885,6 +885,7 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 			if (survivorsLiving >= 1)
 			{
 				RequestFrame(Zombie_Setup, victim);
+				DebugText("%N was swapped to blue", victim);
 				if (survivorsLiving == 1)
 				{
 					DebugText("Playing one left music");
@@ -898,6 +899,7 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 			}
 			else
 			{
+				DebugText("Not swapping %N, there are no alive survivors", victim);
 				ForceWin(TEAM_ZOMBIES);
 			}
 		}
