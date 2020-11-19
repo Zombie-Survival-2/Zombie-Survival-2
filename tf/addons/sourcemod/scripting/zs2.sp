@@ -770,7 +770,7 @@ Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, in
 	return Plugin_Continue;
 }
 
-Action OnWeaponSwitch(int client, int weapon)
+Action OnWeaponSwitch(int client, int weapon) // TODO: Use build and destroy events instead of weapon switch detection
 {
 	if(!IsValidClient(client) || GetClientTeam(client) != TEAM_SURVIVORS || TF2_GetPlayerClass(client) != TFClass_Engineer 
 	|| !IsValidEntity(GetPlayerWeaponSlot(client, 3)) || !IsValidEntity(GetPlayerWeaponSlot(client, 4)) || !IsValidEntity(weapon)) 
@@ -811,7 +811,6 @@ Action OnWeaponSwitch(int client, int weapon)
 
 }
 
-
 /* Client events
 ==================================================================================================== */
 
@@ -825,6 +824,11 @@ Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 	{		
 		RequestFrame(OnlyMelee, player);
 		RequestFrame(RemoveWearable, player);
+	}
+	else if(!IsAllowedClass(TF2_GetPlayerClass(player))) // player is on team_survivor
+	{
+		PickClass(player);
+		return Plugin_Continue;
 	}
 
 	if(TF2_GetPlayerClass(player) == TFClass_Scout)
@@ -1124,6 +1128,19 @@ bool IsAllowedClass(const TFClassType class)
 	}
 
 	return true;
+}
+
+void PickClass(const int client)
+{
+	for (int i = 1; i < 10; i++)
+	{
+		if (IsAllowedClass(view_as<TFClassType>(i)))
+		{
+			TF2_SetPlayerClass(client, view_as<TFClassType>(i));
+			TF2_RespawnPlayer(client);
+			break;
+		}
+	}
 }
 
 void ForceWin(int team)
