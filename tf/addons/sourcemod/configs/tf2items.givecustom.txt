@@ -1,0 +1,13 @@
+"custom_give_weapons_vlolz"
+{
+	"9999"
+	{
+		"classname"		"tf_weapon_rocketlauncher"
+		"index"		"228"
+		"slot"		"0"
+		"quality"		"6"
+		"level"		"29"
+		"attribs"		"134 ; 19"
+		"ammo"		"20"
+	}
+}
