@@ -501,12 +501,11 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 		AcceptEntityInput(ent, "SetTeam");
 	}
 	ent = -1;
-	while ((ent = FindEntityByClassname(ent, "func_respawnroom")) != -1 || (ent = FindEntityByClassname(ent, "func_respawnroomvisualizer")) != -1)
+	while ((ent = FindEntityByClassname(ent, "func_respawnroomvisualizer")) != -1)
 	{
 		if (GetEntProp(ent, Prop_Send, "m_iTeamNum") == TEAM_SURVIVORS)
 			AcceptEntityInput(ent, "Disable");
 	}
-
 	// Allow all players to move again
 	for (int i = 1; i <= MaxClients; i++)
 	{
@@ -763,12 +762,14 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 
 Action Listener_JoinClass(int client, const char[] command, int args)
 {
-	if (!waitingForPlayers)
+	if (!waitingForPlayers && GetClientTeam(client) == TEAM_SURVIVORS)
 	{
+		if (!setupTime)
+			return Plugin_Handled;
 		char chosenClass[16];
 		GetCmdArg(1, chosenClass, sizeof(chosenClass));
-
-		if (GetClientTeam(client) == TEAM_SURVIVORS && !IsAllowedClass(TF2_GetClass(chosenClass)))
+		// TODO: Need to allow survivor to switch to their own class
+		if (!IsAllowedClass(TF2_GetClass(chosenClass)))
 		{
 			EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 			return Plugin_Handled;
