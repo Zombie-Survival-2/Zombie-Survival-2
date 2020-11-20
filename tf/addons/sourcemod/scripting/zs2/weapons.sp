@@ -91,7 +91,7 @@ public void Weapons_AlterPlayerWeapons(int client)
 	{
 		int weapon_index = 0;
 		int weapon_entity = 0;
-		for (i = 0; i < 6; i++)
+		for (int i = 0; i < 6; i++)
 		{
 			weapon_entity = GetPlayerWeaponSlot(client, i);
 			if (weapon_entity > MaxClients)
