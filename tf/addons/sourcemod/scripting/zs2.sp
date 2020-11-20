@@ -81,6 +81,7 @@ RoundType roundType;
 
 // JSON-controlled variables
 bool attackTeamSwap,
+	autoHandleDoors,
 	freezeInSetup;
 int objectiveBonus,
 	roundDuration,
@@ -169,6 +170,8 @@ public void OnPluginStart()
 
 public void OnMapStart()
 {
+	roundStarted = false;
+
 	// Standard sounds precaching
 	PrecacheSound("replay/replaydialog_warn.wav");
 	
@@ -227,8 +230,9 @@ public void OnMapStart()
 		mapScriptFile.Close();
 		JSON_Object mapScript = json_decode(mapScriptText);
 		// Booleans reversed because default is false
-		freezeInSetup = !mapScript.GetBool("donotfreeze");
 		attackTeamSwap = !mapScript.GetBool("cp_a_donotswap");
+		autoHandleDoors = !mapScript.GetBool("ent_noautodoors");
+		freezeInSetup = !mapScript.GetBool("donotfreeze");
 		int intval = mapScript.GetInt("t_round");
 		if (intval > 0)
 			roundDuration = intval;
@@ -325,6 +329,7 @@ public void OnConfigsExecuted()
 	FindConVar("tf_bot_melee_only").SetInt(1);
 	FindConVar("tf_ctf_bonus_time").SetInt(0);
 	FindConVar("tf_flag_caps_per_round").SetInt(2);
+	FindConVar("tf_forced_holiday").SetInt(2);
 	FindConVar("tf_weapon_criticals").SetInt(0);
 }
 
@@ -528,28 +533,31 @@ public Action CountdownSetup(Handle timer)
 		Event event = CreateEvent("teamplay_setup_finished");
 		event.Fire();
 
-		int ent = -1;
-		while ((ent = FindEntityByClassname(ent, "func_door")) != -1)
+		if (autoHandleDoors)
 		{
-			AcceptEntityInput(ent, "Unlock");
-			AcceptEntityInput(ent, "Open");
-			AcceptEntityInput(ent, "Lock");
-		}
-		ent = -1;
-		while ((ent = FindEntityByClassname(ent, "prop_dynamic")) != -1)
-		{
-			char tName[64];
-			GetEntPropString(ent, Prop_Data, "m_iName", tName, sizeof(tName));
-			if (StrContains(tName, "door", false) != -1 || StrContains(tName, "gate", false) != -1)
+			int ent = -1;
+			while ((ent = FindEntityByClassname(ent, "func_door")) != -1)
 			{
-				SetVariantString("open");
-				AcceptEntityInput(ent, "SetAnimation");
+				AcceptEntityInput(ent, "Unlock");
+				AcceptEntityInput(ent, "Open");
+				AcceptEntityInput(ent, "Lock");
 			}
-		}
-		ent = -1;
-		while ((ent = FindEntityByClassname(ent, "trigger_multiple")) != -1)
-		{
-			AcceptEntityInput(ent, "Disable");
+			ent = -1;
+			while ((ent = FindEntityByClassname(ent, "prop_dynamic")) != -1)
+			{
+				char tName[64];
+				GetEntPropString(ent, Prop_Data, "m_iName", tName, sizeof(tName));
+				if (StrContains(tName, "door", false) != -1 || StrContains(tName, "gate", false) != -1)
+				{
+					SetVariantString("open");
+					AcceptEntityInput(ent, "SetAnimation");
+				}
+			}
+			ent = -1;
+			while ((ent = FindEntityByClassname(ent, "trigger_multiple")) != -1)
+			{
+				AcceptEntityInput(ent, "Disable");
+			}
 		}
 
 		return Plugin_Stop;

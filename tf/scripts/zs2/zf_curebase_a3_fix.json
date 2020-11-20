@@ -6,7 +6,7 @@
 	"cp_a": true,
 	"cp_a_donotswap": true,
 	"cp_d": false,
-	"cp_intro": "zs2/intro_cp/nomercy.mp3"
+	"cp_intro": "zs2/intro_cp/nomercy.mp3",
 	
 	"st_s": false
 }
