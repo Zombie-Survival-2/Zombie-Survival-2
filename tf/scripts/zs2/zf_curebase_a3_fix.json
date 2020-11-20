@@ -1,7 +1,7 @@
 {
 	"t_setup": 20,
 	"t_round": 300,
-	"donotfreeze": false,
+	"donotfreeze": true,
 	
 	"cp_a": true,
 	"cp_a_donotswap": true,

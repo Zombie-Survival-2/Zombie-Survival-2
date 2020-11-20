@@ -323,6 +323,7 @@ public void OnConfigsExecuted()
 	InsertServerTag("zs2");
 
 	// Cvars
+	FindConVar("mp_idledealmethod").SetInt(2);
 	FindConVar("mp_scrambleteams_auto").SetInt(0);
 	FindConVar("mp_teams_unbalance_limit").SetInt(0);
 	FindConVar("tf_avoidteammates_pushaway").SetInt(0);
