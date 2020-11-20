@@ -9,6 +9,20 @@ wWeaponLevel = CreateArray(1);
 wWeaponQuality = CreateArray(1);
 wWeaponAttribute = CreateArray(ByteCountToCells(64));
 wBlockList = CreateArray(ByteCountToCells(64));
+Handle h_index = null;
+Handle h_Old_Weapon_String = null;
+Handle h_New_Weapon_String = null;
+Handle h_ForceWeaponActive = null;
+Handle h_WeaponIndex = null;
+Handle h_WeaponLevel = null;
+Handle h_WeaponQuality = null;
+Handle h_WeaponAttribute = null;
+Handle h_WeaponAmmo1 = null;
+Handle h_WeaponAmmo2 = null;
+Handle h_WeaponAmmo3 = null;
+Handle h_WeaponClip1 = null;
+Handle h_WeaponClip2 = null;
+Handle h_WeaponClip3 = null;
 
 public void Weapons_Initialise()
 {
