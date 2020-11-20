@@ -106,6 +106,7 @@ ConVar smDebug,
 #include "zs2/attack.sp"
 #include "zs2/defend.sp"
 #include "zs2/survival.sp"
+#include "zs2/weapons.sp"
 
 /* Plugin initialisation
 ==================================================================================================== */
@@ -214,6 +215,9 @@ public void OnMapStart()
 	TEAM_SURVIVORS = TEAM_RED;
 	TEAM_ZOMBIES = TEAM_BLUE;
 	delete roundTimerHandle;
+	
+	// Read weapons CFG file
+	Weapons_Initialise();
 	
 	// Read JSON file and set related variables
 	char mapName[64];
@@ -873,6 +877,9 @@ Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 		TF2Attrib_SetByName(player, "major move speed bonus", 0.8);
 		TF2_AddCondition(player, TFCond_SpeedBuffAlly, 0.001);
 	}
+	
+	// Alter player's weapons if necessary
+	RequestFrame(Weapons_AlterPlayerWeapons, player);
 
 	return Plugin_Continue;
 }
@@ -897,6 +904,9 @@ Action Event_OnRegen(Event event, const char[] name, bool dontBroadcast)
 		else
 			SetEntityMoveType(player, MOVETYPE_WALK);
 	}
+	
+	// Alter player's weapons if necessary
+	RequestFrame(Weapons_AlterPlayerWeapons, player);
 
 	return Plugin_Continue;
 }
