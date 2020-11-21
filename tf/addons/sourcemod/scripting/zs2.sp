@@ -8,7 +8,7 @@
 #include <sdktools>
 #include <tf_econ_data>
 #include <tf2_stocks>
-#include <tf2items>
+#include <tf2items_giveweapon>
 #include <tf2attributes>
 #include <advanced_motd>
 #include <json>
@@ -157,6 +157,7 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_zs_queue", Command_Next);
 	RegConsoleCmd("sm_zs2queue", Command_Next);
 	RegConsoleCmd("sm_zs2_queue", Command_Next);
+	RegAdminCmd("sm_queuepoints", GivePoints, ADMFLAG_ROOT);
 
 	// Listeners
 	AddCommandListener(Listener_Build, "build");
@@ -868,8 +869,8 @@ Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 
 	if (GetClientTeam(player) == TEAM_ZOMBIES)
 	{		
-		RequestFrame(OnlyMelee, player);
-		RequestFrame(RemoveWearable, player);
+		OnlyMelee(player);
+		RemoveWearable(player);
 	}
 
 	// Apply slow move speed attributes to Scouts
@@ -878,9 +879,6 @@ Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 		TF2Attrib_SetByName(player, "major move speed bonus", 0.8);
 		TF2_AddCondition(player, TFCond_SpeedBuffAlly, 0.001);
 	}
-	
-	// Alter player's weapons if necessary
-	RequestFrame(Weapons_AlterPlayerWeapons, player);
 
 	return Plugin_Continue;
 }
@@ -894,8 +892,8 @@ Action Event_OnRegen(Event event, const char[] name, bool dontBroadcast)
 	
 	if (team == TEAM_ZOMBIES)
 	{
-		RequestFrame(OnlyMelee, player);
-		RequestFrame(RemoveWearable, player);
+		OnlyMelee(player);
+		RemoveWearable(player);
 	}
 	
 	if (team == TEAM_BLUE && setupTime)
@@ -907,7 +905,7 @@ Action Event_OnRegen(Event event, const char[] name, bool dontBroadcast)
 	}
 	
 	// Alter player's weapons if necessary
-	RequestFrame(Weapons_AlterPlayerWeapons, player);
+	Weapons_AlterPlayerWeapons(player);
 	return Plugin_Continue;
 }
 
@@ -1124,6 +1122,16 @@ public Action Command_Reset(int client, int args)
 	}
 	queuePoints[client] = 0;
 	CPrintToChat(client, "%s {haunted}Your queue points were reset to 0.", MESSAGE_PREFIX);
+	return Plugin_Handled;
+}
+
+public Action GivePoints(int client, int args)
+{
+	if (smDebug.BoolValue)
+	{
+		queuePoints[client] = 999;
+	}
+	
 	return Plugin_Handled;
 }
 
