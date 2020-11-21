@@ -907,7 +907,7 @@ Action Event_OnRegen(Event event, const char[] name, bool dontBroadcast)
 	}
 	
 	// Alter player's weapons if necessary
-	Weapons_AlterPlayerWeapons(player);
+	RequestFrame(Weapons_AlterPlayerWeapons, player);
 	return Plugin_Continue;
 }
 
