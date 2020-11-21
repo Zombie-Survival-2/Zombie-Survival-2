@@ -113,7 +113,7 @@ public void Weapons_AlterPlayerWeapons(int client)
 				weapon_index = GetEntProp(GetPlayerWeaponSlot(client, i), Prop_Send, "m_iItemDefinitionIndex");
 				if (weapon_index > -1)
 				{
-					Weapons_AlterWeapon(kv, client, weapon_index, weapon_entity, false);
+					Weapons_AlterWeapon(kv, client, weapon_index, weapon_entity);
 					char weapon_name[64];
 					GetEntityClassname(weapon_entity, weapon_name, sizeof(weapon_name));
 					int MainIndex = Weapons_CheckForSwap(wOldWeapon, weapon_name, weapon_index);
@@ -131,6 +131,69 @@ public void Weapons_AlterPlayerWeapons(int client)
 		}
 	}
 	CloseHandle(kv);
+}
+
+void Weapons_AlterWeapon(Handle kv, client, weapon_index, weapon_entity)
+{
+	KvRewind(kv);
+	char sSectionBuffer[32];
+	char sSubKeyBuffer[32];
+	char sTempBuffer[64];
+	bool needToAlterWeapon = false;
+	float newkeyvalue = 1.0;
+	char weapon_name[64];
+	GetEntityClassname(weapon_entity, weapon_name, sizeof(weapon_name));
+	do
+	{
+		if (KvGotoFirstSubKey(kv, false))
+		{
+			do
+			{
+				if (KvGetSectionName(kv, sSectionBuffer, sizeof(sSectionBuffer)))
+				{
+					if (KvGotoFirstSubKey(kv, false))
+					{
+						do
+						{
+							if (KvGetSectionName(kv, sSubKeyBuffer, sizeof(sSubKeyBuffer)))
+							{
+								if (StrContains(sSubKeyBuffer,"block") == 0)
+								{
+									KvGetString(kv, NULL_STRING, sTempBuffer, sizeof(sTempBuffer));
+									PushArrayString(h_Block_list, sTempBuffer);
+								}
+								else
+								{
+									if (StrContains(sSubKeyBuffer,"all") == 0 && KvGetNum(kv, NULL_STRING) == 1)
+										needToAlterWeapon = true;
+									else if (StrContains(sSubKeyBuffer,"index") == 0 && weapon_index == KvGetNum(kv, NULL_STRING))
+										needToAlterWeapon = true;
+									else if (StrContains(sSubKeyBuffer,"class") == 0)
+									{
+										KvGetString(kv, NULL_STRING, sTempBuffer, sizeof(sTempBuffer));
+										if (StrEqual(sTempBuffer,weapon_name))
+											needToAlterWeapon = true;
+									}
+									if (needToAlterWeapon)
+									{
+										if (!(StrContains(sSubKeyBuffer, "index") == 0 || StrContains(sSubKeyBuffer, "class") == 0))
+										{
+											TF2Attrib_SetByName(weapon_entity, sSubKeyBuffer, newkeyvalue);
+											TF2_RegeneratePlayer(client);
+										}
+									}
+								}
+							}
+						} while (KvGotoNextKey(kv, false));
+						KvGoBack(kv);
+					}
+				}
+				needToAlterWeapon = false;
+			} while (KvGotoNextKey(kv, false));
+			KvGoBack(kv);
+		}
+		needToAlterWeapon = false;
+	} while (KvGotoNextKey(kv, false));
 }
 
 int Weapons_CheckForSwap(Handle hString, char[] WeaponString, int iItemDefinitionIndex)
