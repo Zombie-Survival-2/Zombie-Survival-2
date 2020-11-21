@@ -6,8 +6,9 @@
 #include <sourcemod>
 #include <sdkhooks>
 #include <sdktools>
-#include <tf2>
+#include <tf_econ_data>
 #include <tf2_stocks>
+#include <tf2items>
 #include <tf2attributes>
 #include <advanced_motd>
 #include <json>
@@ -906,8 +907,7 @@ Action Event_OnRegen(Event event, const char[] name, bool dontBroadcast)
 	}
 	
 	// Alter player's weapons if necessary
-	RequestFrame(Weapons_AlterPlayerWeapons, player);
-
+	Weapons_AlterPlayerWeapons(player);
 	return Plugin_Continue;
 }
 
