@@ -6,7 +6,8 @@ ArrayList wIndexes,
 public void Weapons_Initialise()
 {
 	char sPath[128], section[16], att[128];
-	BuildPath(Path_SM, sPath, sizeof(sPath), "configs/weapons_zs2.cfg");
+	
+	BuildPath(Path_SM, sPath, sizeof(sPath), "configs/zs2_weapons.cfg");
 
 	if (!FileExists(sPath))
 	{
