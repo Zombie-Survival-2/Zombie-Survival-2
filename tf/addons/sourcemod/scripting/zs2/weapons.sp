@@ -1,5 +1,7 @@
 // CFG-controlled variables
-ArrayList wIndex, wReplace, wAtt;
+ArrayList wIndexes,
+	wReplace,
+	wAttributes;
 
 public void Weapons_Initialise()
 {
@@ -12,11 +14,11 @@ public void Weapons_Initialise()
 		return;
 	}
 
-	wIndex = new ArrayList();
+	wIndexes = new ArrayList();
 	wReplace = new ArrayList();
-	wAtt = new ArrayList(ByteCountToCells(128));
+	wAttributes = new ArrayList(ByteCountToCells(128));
 
-	KeyValues kv = new KeyValues("weapons_zs2");
+	KeyValues kv = new KeyValues("TF2_ZS2_WEAPONS");
 	kv.ImportFromFile(sPath);
 	kv.GotoFirstSubKey();
 
@@ -28,9 +30,9 @@ public void Weapons_Initialise()
 		//kv.GetString("affected", affected, sizeof(affected), "all");
 		kv.GetString("attributes", att, sizeof(att), "NAN");
 
-		wIndex.Push(index);
+		wIndexes.Push(index);
 		wReplace.Push(replace);
-		wAtt.PushString(att);
+		wAttributes.PushString(att);
 	}
 
 	while (kv.GotoNextKey());
@@ -41,7 +43,7 @@ public void Weapons_Initialise()
 
 public void Weapons_AlterPlayerWeapons(int client)
 {
-	if (wIndex == null || !wIndex.Length)
+	if (wIndexes == null || !wIndexes.Length)
 		return;
 
 	for (int i = 0; i < 6; i++)
@@ -50,11 +52,11 @@ public void Weapons_AlterPlayerWeapons(int client)
 		if (wep == -1)
 			continue;
 
-		int index = wIndex.FindValue(GetEntProp(wep, Prop_Send, "m_iItemDefinitionIndex"));
+		int index = wIndexes.FindValue(GetEntProp(wep, Prop_Send, "m_iItemDefinitionIndex"));
 		if (index != -1)
 		{
 			char att[128];
-			wAtt.GetString(index, att, sizeof(att));
+			wAttributes.GetString(index, att, sizeof(att));
 			SpawnWeapon(client, wReplace.Get(index), att);
 		}
 	}
