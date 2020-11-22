@@ -1,7 +1,7 @@
 public void Survival_RoundStart()
 {
-	TEAM_SURVIVORS = 2;
-	TEAM_ZOMBIES = 3;
+	TEAM_SURVIVORS = TEAM_RED;
+	TEAM_ZOMBIES = TEAM_BLUE;
 
 	ST_IntroMusic();
 	ST_DisableObjectives();

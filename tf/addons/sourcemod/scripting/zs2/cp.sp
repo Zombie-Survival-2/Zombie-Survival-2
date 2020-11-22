@@ -19,17 +19,28 @@ void CP_SetupObjectives()
 		while ((ent = FindEntityByClassname(ent, objectiveEntities[i])) != -1)
 		{
 			GetEdictClassname(ent, classname, sizeof(classname));
-			// Prevent RED team from capturing control points
+			// Prevent defending team from capturing control points
 			if (StrEqual(classname, "trigger_capture_area"))
 			{
-				SetVariantString("2 0");
+				if (roundType == Game_Attack && !attackTeamSwap)
+					SetVariantString("3 0");
+				else
+					SetVariantString("2 0");
 				AcceptEntityInput(ent, "SetTeamCanCap");
 			}
-			// Disable BLU team's intelligence
+			// Disable attacking team's intelligence
 			if (StrEqual(classname, "item_teamflag"))
 			{
-				if (GetEntProp(ent, Prop_Send, "m_iTeamNum") == 3)
-					AcceptEntityInput(ent, "Kill");
+				if (roundType == Game_Attack && !attackTeamSwap)
+				{
+					if (GetEntProp(ent, Prop_Send, "m_iTeamNum") == TEAM_RED)
+						AcceptEntityInput(ent, "Kill");
+				}
+				else
+				{
+					if (GetEntProp(ent, Prop_Send, "m_iTeamNum") == TEAM_BLUE)
+						AcceptEntityInput(ent, "Kill");
+				}
 			}
 		}
 	}
