@@ -18,67 +18,79 @@ stock void Weapons_Initialise()
 		LogError("%s Could not find file %s.", MESSAGE_PREFIX_NO_COLOR, sPath);
 		return;
 	}
+
 	g_aWeapons = new ArrayList(sizeof(WeaponConfig));
 	KeyValues kv = new KeyValues("TF2_ZS2_WEAPONS");
 
 	kv.ImportFromFile(sPath);
 	kv.GotoFirstSubKey();
-	do
+	do 
 	{
-		WeaponConfig weapon;
 		kv.GetSectionName(section, sizeof(section));
-		weapon.defIndex = StringToInt(section);
-		weapon.replaceIndex = kv.GetNum("replace", -1);
-		kv.GetString("attributes", weapon.sAttrib, sizeof(weapon.sAttrib), "");
+		int iIndex = -1;
 
-		g_aWeapons.PushArray(weapon);
-	} 
+		if (StringToIntEx(section, iIndex) == 0)
+		{
+			LogError("Invalid index \"%s\" at Weapons config section", section);
+		}
+		else
+		{
+			WeaponConfig weapon;
+			weapon.defIndex = iIndex;
+			weapon.replaceIndex = kv.GetNum("replace", -1);
+			kv.GetString("attributes", weapon.sAttrib, sizeof(weapon.sAttrib), "");
+			g_aWeapons.PushArray(weapon);
+		}
+	}
+
 	while (kv.GotoNextKey());
 	kv.Rewind();
 	delete kv;
 }
 
-stock void WeaponCheck(int client)
+stock void WeaponCheck(int iClient)
 {
-	for(int slot = 0; slot < 6; slot++)
+	if (!IsValidClient(iClient) || !IsPlayerAlive(iClient))
+		return;
+
+	if (GetClientTeam(iClient) == TEAM_ZOMBIES)
+	{		
+		OnlyMelee(iClient);
+		RemoveWearable(iClient);
+	}
+	
+	for (int iSlot = 0; iSlot < 6; iSlot++)
 	{
-		int iEntity = GetPlayerWeaponSlot(client, slot);
-		if (iEntity <= MaxClients)
+		int iEntity = GetPlayerWeaponSlot(iClient, iSlot);
+		if (iEntity > MaxClients)
 		{
-			continue;
-		}
-
-		int iItemDefinitionIndex = GetEntProp(iEntity, Prop_Send, "m_iItemDefinitionIndex");
-		for (int i = 0; i < g_aWeapons.Length; i++)
-		{
-			WeaponConfig weapon;
-			g_aWeapons.GetArray(i, weapon, sizeof(weapon));
-			if (weapon.defIndex == iItemDefinitionIndex)
+			int iIndex = GetEntProp(iEntity, Prop_Send, "m_iItemDefinitionIndex");
+			
+			for (int i = 0; i < g_aWeapons.Length; i++)
 			{
-				if (weapon.replaceIndex != -1)
+				WeaponConfig wep;
+				g_aWeapons.GetArray(i, wep, sizeof(wep));
+				
+				if (wep.defIndex == iIndex)
 				{
-					char itemName[32];
-					TF2Econ_GetItemName(weapon.defIndex, itemName, sizeof(itemName));
-					TF2_RemoveWeaponSlot(client, slot);
-					iEntity = TF2Items_GiveWeapon2(client, weapon.replaceIndex);
-					CPrintToChat(client, "%s Blocked {haunted}'%s'.", MESSAGE_PREFIX, itemName);
-				}
-
-				if (!StrEqual(weapon.sAttrib, ""))
-				{
-					char atts[32][32];
-					int count = ExplodeString(weapon.sAttrib, " ; ", atts, sizeof(atts), sizeof(atts[]));
-					if (count > 1)
+					if (wep.replaceIndex > -1)
 					{
-						for (int j = 0; j < count; j += 2)
-						{
-							TF2Attrib_SetByDefIndex(iEntity, StringToInt(atts[j]), StringToFloat(atts[j + 1]));
-						}
+						TF2_RemoveWeaponSlot(iClient, iSlot);
+						iEntity = TF2Items_GiveWeapon2(iClient, wep.replaceIndex);
 					}
-				}
 
-				break;
+					char sAttribs[32][32];
+					int iCount = ExplodeString(wep.sAttrib, " ; ", sAttribs, sizeof(sAttribs), sizeof(sAttribs));
+					if (iCount > 1)
+						for (int j = 0; j < iCount; j+= 2)
+							TF2Attrib_SetByDefIndex(iEntity, StringToInt(sAttribs[j]), StringToFloat(sAttribs[j+1]));
+					
+					break;
+				}
 			}
+			
+			//This will refresh health max calculation and other attributes
+			TF2Attrib_ClearCache(iEntity);
 		}
 	}
 }
@@ -144,12 +156,6 @@ stock int TF2Items_GiveWeapon2(const int client, const int iItemDefinitionIndex)
 	
 	if (IsValidEntity(iWeapon))
 	{
-		ArrayList attributes = TF2Econ_GetItemStaticAttributes(iItemDefinitionIndex);
-		for (int i = 0; i < attributes.Length; i++)
-		{
-			TF2Attrib_SetByDefIndex(iWeapon, attributes.Get(i, 0), attributes.Get(i, 1));
-		}
-		
 		DispatchSpawn(iWeapon);
 		SetEntProp(iWeapon, Prop_Send, "m_bValidatedAttachedEntity", true); // Make weapon visible
 		EquipPlayerWeapon(client, iWeapon);
