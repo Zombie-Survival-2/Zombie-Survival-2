@@ -45,8 +45,8 @@ enum
 };
 bool setupTime,
 	roundStarted,
+	regenAgain[MAXPLAYERS+1],
 	waitingForPlayers,
-	firstConnection[MAXPLAYERS+1] = {true, ...},
 	selectedAsSurvivor[MAXPLAYERS+1];
 int roundTimer,
 	TEAM_SURVIVORS,
@@ -369,7 +369,7 @@ void InsertServerTag(const char[] tagToInsert)
 
 public void OnClientPutInServer(int client)
 {
-	firstConnection[client] = true;
+	CreateTimer(15.0, Timer_DisplayIntro, client);
 	SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
 	SDKHook(client, SDKHook_WeaponSwitch, OnWeaponSwitch);
 }
@@ -755,17 +755,11 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 
 	if (waitingForPlayers)
 		return Plugin_Continue;
-
+	
 	if (StrContains(chosenTeam, "red", false) > -1 && roundStarted)
 	{
 		EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 		return Plugin_Handled;
-	}
-
-	if (firstConnection[client])
-	{
-		CreateTimer(3.0, Timer_DisplayIntro, client);
-		firstConnection[client] = false;
 	}
 
 	return Plugin_Continue;
@@ -775,8 +769,9 @@ Action Listener_JoinClass(int client, const char[] command, int args)
 {
 	if (!waitingForPlayers && GetClientTeam(client) == TEAM_SURVIVORS)
 	{
-		if (!setupTime)
+		if (!setupTime && IsPlayerAlive(client))
 			return Plugin_Handled;
+
 		char chosenClass[16];
 		GetCmdArg(1, chosenClass, sizeof(chosenClass));
 		// TODO: Need to allow survivor to switch to their own class
@@ -884,17 +879,18 @@ Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 Action Event_OnRegen(Event event, const char[] name, bool dontBroadcast)
 {
 	int player = GetClientOfUserId(event.GetInt("userid"));
-	if (GetClientTeam(player) < TEAM_RED)
+	if (GetClientTeam(player) <= TEAM_SPEC)
 		return;
-	
-	if (GetClientTeam(player) == TEAM_ZOMBIES)
-	{		
-		OnlyMelee(player);
-		RemoveWearable(player);
+
+	if(!regenAgain[player])
+	{
+		regenAgain[player] = true;
+		TF2_RegeneratePlayer(player);
+		return;
 	}
 
+	regenAgain[player] = false;
 	WeaponCheck(player);
-	SetEntPropEnt(player, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(player, 2));
 }
 
 Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
