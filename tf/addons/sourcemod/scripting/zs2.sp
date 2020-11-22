@@ -751,9 +751,6 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 		EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 		return Plugin_Handled;
 	}
-
-	if (waitingForPlayers)
-		return Plugin_Continue;
 	
 	if (waitingForPlayers)
 		return Plugin_Continue;
