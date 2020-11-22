@@ -37,7 +37,7 @@ public Plugin myinfo = {
 };
 
 // Standard variables
-enum 
+enum
 {
 	TEAM_SPEC = 1,
 	TEAM_RED = 2,
@@ -733,7 +733,7 @@ Action OnWeaponSwitch(int client, int weapon) // TODO: Use build and destroy eve
 		int ent = -1, dispenserCount = 0;
 		while ((ent = FindEntityByClassname(ent, "obj_dispenser")) != -1)
 		{
-			if (GetEntPropEnt(ent, Prop_Send, "m_hBuilder") != client) 
+			if (GetEntPropEnt(ent, Prop_Send, "m_hBuilder") != client)
 				continue;
 
 			dispenserCount++;
