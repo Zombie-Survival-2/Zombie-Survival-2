@@ -82,7 +82,8 @@ RoundType roundType;
 // JSON-controlled variables
 bool attackTeamSwap,
 	autoHandleDoors,
-	freezeInSetup;
+	freezeInSetup,
+	useAllSpawns;
 int objectiveBonus,
 	roundDuration,
 	roundDurationCP,
@@ -229,6 +230,7 @@ public void OnMapStart()
 		mapScriptFile.ReadString(mapScriptText, sizeof(mapScriptText));
 		mapScriptFile.Close();
 		JSON_Object mapScript = json_decode(mapScriptText);
+		useAllSpawns = mapScript.GetBool("st_allspawns");
 		// Booleans reversed because default is false
 		attackTeamSwap = !mapScript.GetBool("cp_a_donotswap");
 		autoHandleDoors = !mapScript.GetBool("ent_noautodoors");
@@ -295,8 +297,10 @@ public void OnMapStart()
 	else
 	{
 		DebugText("JSON file not found, using defaults");
-		freezeInSetup = true;
 		attackTeamSwap = true;
+		autoHandleDoors = true;
+		freezeInSetup = true;
+		useAllSpawns = false;
 		roundDuration = 300;
 		setupDuration = 30;
 		introCP = "";
@@ -501,9 +505,9 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 
 	// Force resupply lockers to only work for zombies
 	int ent = -1;
+	SetVariantInt(TEAM_ZOMBIES);
 	while ((ent = FindEntityByClassname(ent, "func_regenerate")) != -1)
 	{
-		SetVariantInt(TEAM_ZOMBIES);
 		AcceptEntityInput(ent, "SetTeam");
 	}
 	ent = -1;
@@ -511,6 +515,20 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 	{
 		if (GetEntProp(ent, Prop_Send, "m_iTeamNum") == TEAM_SURVIVORS)
 			AcceptEntityInput(ent, "Disable");
+	}
+	// Allow zombies to spawn anywhere if playing a non-CP game
+	if (roundType != Game_Attack && roundType != Game_Defend && useAllSpawns)
+	{
+		ent = -1;
+		while ((ent = FindEntityByClassname(ent, "func_respawnroom")) != -1)
+		{
+			AcceptEntityInput(ent, "SetTeam");
+		}
+		ent = -1;
+		while ((ent = FindEntityByClassname(ent, "info_player_teamspawn")) != -1)
+		{
+			AcceptEntityInput(ent, "SetTeam");
+		}
 	}
 	// Allow all players to move again
 	for (int i = 1; i <= MaxClients; i++)

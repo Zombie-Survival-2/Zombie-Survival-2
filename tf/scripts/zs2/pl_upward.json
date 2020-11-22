@@ -18,6 +18,7 @@
 	"st_sc": true,
 	"st_intro": "zs2/intro_st/bloodharvest.mp3",
 	"st_last": "zs2/last/scavengelast.wav",
+	"st_allspawns": true,
 	
 	"ent_noautodoors": false,
 	"ent_noautovis": true,

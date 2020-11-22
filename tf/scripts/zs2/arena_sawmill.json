@@ -8,5 +8,6 @@
 	"cp_intro": "zs2/intro_cp/nomercy.mp3",
 	
 	"st_s": true,
-	"st_intro": "zs2/intro_st/hardrain.mp3"
+	"st_intro": "zs2/intro_st/hardrain.mp3",
+	"st_allspawns": true
 }

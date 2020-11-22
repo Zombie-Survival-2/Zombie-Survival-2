@@ -8,6 +8,7 @@
 	
 	"st_s": true,
 	"st_intro": "zs2/intro_st/deadair.mp3",
+	"st_allspawns": false,
 	
 	"ent_noautodoors": true
 }
