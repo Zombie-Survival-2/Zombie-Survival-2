@@ -12,7 +12,7 @@ enum struct WeaponConfig
 stock void Weapons_Initialise()
 {
 	char sPath[128], section[16];
-	BuildPath(Path_SM, sPath, sizeof(sPath), "configs/zs2_g_aWeapons.cfg");
+	BuildPath(Path_SM, sPath, sizeof(sPath), "configs/zs2_weapons.cfg");
 	if (!FileExists(sPath))
 	{
 		LogError("%s Could not find file %s.", MESSAGE_PREFIX_NO_COLOR, sPath);
