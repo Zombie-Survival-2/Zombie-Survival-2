@@ -750,31 +750,29 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 {
 	char chosenTeam[8];
 	GetCmdArg(1, chosenTeam, sizeof(chosenTeam));
-
-	if (CheckCommandAccess(client, "", ADMFLAG_KICK) && StrContains(chosenTeam, "red", false) == -1)
-		return Plugin_Continue;
-
-	if (StrContains(chosenTeam, "spec", false) > -1)
+	
+	if (StrContains(chosenTeam, "spec", false) > -1 && !CheckCommandAccess(client, "", ADMFLAG_KICK, true))
 	{
 		EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 		return Plugin_Handled;
 	}
+	
+	if (waitingForPlayers)
+		return Plugin_Continue;
 	
 	if (StrContains(chosenTeam, "red", false) > -1 && roundStarted)
 	{
 		EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 		return Plugin_Handled;
 	}
-
+	
 	if (firstConnection[client])
 	{
 		CreateTimer(3.0, Timer_DisplayIntro, client);
 		firstConnection[client] = false;
-		return Plugin_Continue;
 	}
-
-	EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
-	return Plugin_Handled;
+	
+	return Plugin_Continue;
 }
 
 Action Listener_JoinClass(int client, const char[] command, int args)
