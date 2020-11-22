@@ -2,10 +2,11 @@
 	"t_setup": 30,
 	"t_round": 300,
 	"donotfreeze": false,
-
-	"cp_d": false,
+	
+	"cp_a": false,
+	"cp_d": true,
 	"cp_intro": "zs2/intro_cp/nomercy.mp3",
-
+	
 	"st_s": true,
 	"st_intro": "zs2/intro_st/hardrain.mp3"
 }

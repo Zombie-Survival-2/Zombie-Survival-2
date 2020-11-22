@@ -1,11 +1,14 @@
 {
 	"t_setup": 35,
 	"t_round": 390,
+	"t_cp_minus": 120,
+	"t_cp_bonus": 60,
 	"donotfreeze": true,
 	"heartbeat": false,
 	"tank": "zs2/tank/tank1_22050.wav",
 	
 	"cp_a": true,
+	"cp_a_donotswap": false,
 	"cp_d": true,
 	"cp_intro": "zs2/intro_cp/bloodharvest.mp3",
 	"cp_last": "zs2/last/attacklast_m.wav",
@@ -16,8 +19,8 @@
 	"st_intro": "zs2/intro_st/bloodharvest.mp3",
 	"st_last": "zs2/last/scavengelast.wav",
 	
-	"ent_autodoor": true,
-	"ent_autovis": true,
+	"ent_noautodoors": false,
+	"ent_noautovis": true,
 	"ent_delnow": [
 		"respawnroom_red"
 	],
