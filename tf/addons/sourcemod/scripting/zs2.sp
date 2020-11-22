@@ -8,7 +8,6 @@
 #include <sdktools>
 #include <tf_econ_data>
 #include <tf2_stocks>
-#include <tf2items_giveweapon>
 #include <tf2items>
 #include <tf2attributes>
 #include <advanced_motd>
@@ -450,11 +449,9 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 		int player = GetClientWithMostQueuePoints(selectedAsSurvivor);
 		if (!player)
 		{
-			DebugText("Player %i does not exist and cannot be placed on the survivor team", player);
 			break;
 		}
 
-		DebugText("Placing player %i on the survivor team", player);
 		Survivor_Setup(player);
 		CPrintToChat(player, "%s {haunted}You have been selected to become a {normal}Survivor. {haunted}Your queue points have been reset.", MESSAGE_PREFIX);
 	}
@@ -673,12 +670,10 @@ public int GameVote(NativeVote vote, MenuAction action, int param1, int param2)
 		{
 			if (param1 == VoteCancel_NoVotes)
 			{
-				DebugText("Not enough votes for next round type");
 				vote.DisplayFail(NativeVotesFail_NotEnoughVotes);
 			}
 			else
 			{
-				DebugText("Next round type vote cancelled");
 				vote.DisplayFail(NativeVotesFail_Generic);
 			}
 		}
@@ -750,16 +745,17 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 {
 	char chosenTeam[8];
 	GetCmdArg(1, chosenTeam, sizeof(chosenTeam));
+	DebugText("%N picks %s", client, chosenTeam);
 
-	if (CheckCommandAccess(client, "", ADMFLAG_KICK) && StrContains(chosenTeam, "red", false) == -1)
-		return Plugin_Continue;
-
-	if (StrContains(chosenTeam, "spec", false) > -1)
+	if (StrContains(chosenTeam, "spec", false) > -1 && !CheckCommandAccess(client, "", ADMFLAG_KICK, true))
 	{
 		EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 		return Plugin_Handled;
 	}
-	
+
+	if (waitingForPlayers)
+		return Plugin_Continue;
+
 	if (StrContains(chosenTeam, "red", false) > -1 && roundStarted)
 	{
 		EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
@@ -770,11 +766,9 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 	{
 		CreateTimer(3.0, Timer_DisplayIntro, client);
 		firstConnection[client] = false;
-		return Plugin_Continue;
 	}
 
-	EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
-	return Plugin_Handled;
+	return Plugin_Continue;
 }
 
 Action Listener_JoinClass(int client, const char[] command, int args)
@@ -899,6 +893,7 @@ Action Event_OnRegen(Event event, const char[] name, bool dontBroadcast)
 		RemoveWearable(player);
 	}
 
+	WeaponCheck(player);
 	SetEntPropEnt(player, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(player, 2));
 }
 
@@ -922,14 +917,11 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 					survivorsLiving++;
 			}
 
-			DebugText("%i survivors are alive", survivorsLiving);
 			if (survivorsLiving >= 1)
 			{
 				RequestFrame(Zombie_Setup, victim);
-				DebugText("%N was swapped to blue", victim);
 				if (survivorsLiving == 1)
 				{
-					DebugText("Playing one left music");
 					for (int i = 1; i <= MaxClients; i++)
 					{
 						// Need a way to stop this sound when the round is over
@@ -940,7 +932,6 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 			}
 			else
 			{
-				DebugText("Not swapping %N, there are no alive survivors", victim);
 				ForceWin(TEAM_ZOMBIES);
 			}
 		}
@@ -1055,8 +1046,6 @@ public Action Command_Next(int client, int args)
 
 	for (int i = 0; i < j; i++)
 	{
-		DebugText("Player %i on queue menu is client %i", i, players[i]);
-
 		FormatEx(display, sizeof(display), "%N - %i points", players[i], queuePoints[players[i]]);
 		menu.AddItem("x", display, players[i] == client ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED);
 	}
@@ -1073,7 +1062,6 @@ public Action Command_Reset(int client, int args)
 		{
 			for (int i = 0; i < MaxClients; i++)
 				queuePoints[i] = 0;
-			DebugText("All queue points reset to 0");
 		}
 		else
 			PrintToServer("%s This command is too destructive to be run outside of debug mode.", MESSAGE_PREFIX_NO_COLOR);
@@ -1161,8 +1149,6 @@ bool IsAllowedClass(const TFClassType class)
 
 void ForceWin(int team)
 {
-	DebugText("Forcing win for team %i", team);
-
 	int ent = FindEntityByClassname(-1, "game_round_win");
 	if (ent < 1)
 	{
