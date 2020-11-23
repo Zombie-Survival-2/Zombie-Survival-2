@@ -405,7 +405,7 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 			else
 				SetEntityMoveType(i, MOVETYPE_WALK);
 			
-			CreateTimer(0.5, Timer_CommandClass, client);
+			CreateTimer(0.5, Timer_CommandClass, i);
 		}
 	}
 	
