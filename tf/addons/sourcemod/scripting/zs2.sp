@@ -710,7 +710,7 @@ Action Listener_JoinClass(int client, const char[] command, int args)
 		char chosenClass[16];
 		GetCmdArg(1, chosenClass, sizeof(chosenClass));
 		// TODO: Need to allow survivor to switch to their own class
-		if (!IsAllowedClass(TF2_GetClass(chosenClass)))
+		if (!IsAllowedClass(client, TF2_GetClass(chosenClass)))
 		{
 			EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 			return Plugin_Handled;
@@ -843,6 +843,12 @@ Action Event_OnRegen(Event event, const char[] name, bool dontBroadcast)
 	int player = GetClientOfUserId(event.GetInt("userid"));
 	if (GetClientTeam(player) <= TEAM_SPEC)
 		return;
+
+	if (GetClientTeam(player) == TEAM_SURVIVORS && !IsAllowedClass(player, TF2_GetPlayerClass(player)))
+	{
+		PickClass(player);
+		return;
+	}
 
 	if(!regenAgain[player])
 	{
@@ -1173,15 +1179,21 @@ int GetClientWithMostQueuePoints(bool[] myArray, bool mark = true)
 /* Custom Functions
 ==================================================================================================== */
 
-bool IsAllowedClass(const TFClassType class)
+bool IsAllowedClass(const int client, const TFClassType class)
 {
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsValidClient(i) && GetClientTeam(i) == TEAM_SURVIVORS && TF2_GetPlayerClass(i) == class)
+		if (IsValidClient(i) && GetClientTeam(i) == TEAM_SURVIVORS && TF2_GetPlayerClass(i) == class && i != client)
 			return false;
 	}
 
 	return true;
+}
+
+void PickClass(const int client)
+{
+	TF2_SetPlayerClass(client, view_as<TFClassType>(GetRandomInt(1, 9)));
+	TF2_RespawnPlayer(client);
 }
 
 void ForceWin(int team)
