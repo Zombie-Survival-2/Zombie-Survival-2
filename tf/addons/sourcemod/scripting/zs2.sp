@@ -1029,39 +1029,46 @@ public Action Command_Class(int client, int args)
 	TFClassType class = TF2_GetPlayerClass(client);
 	int team = GetClientTeam(client);
 	bool displayMenu = true;
-	Menu menu2 = new Menu(Handler_Nothing);
+	Panel menu2 = new Panel();
+	char title[32];
 	if (team == TEAM_SURVIVORS)
 	{
 		if (class == TFClass_Soldier)
 		{
-			menu2.SetTitle("%s Soldier (Survivor)", MESSAGE_PREFIX_NO_COLOR);
-			menu2.AddItem("x", "(i) Rocket Jumper replaced with Rocket Launcher.", ITEMDRAW_RAWLINE);
+			Format(title, sizeof(title), "%s Soldier (Survivor)", MESSAGE_PREFIX_NO_COLOR);
+			menu2.SetTitle(title);
+			menu2.DrawText("(i) Rocket Jumper replaced with Rocket Launcher.");
 		}
 		else if (class == TFClass_Pyro)
 		{
-			menu2.SetTitle("%s Pyro (Survivor)", MESSAGE_PREFIX_NO_COLOR);
-			menu2.AddItem("x", "(-) All flamethrowers have 50% less ammo.", ITEMDRAW_RAWLINE);
+			Format(title, sizeof(title), "%s Pyro (Survivor)", MESSAGE_PREFIX_NO_COLOR);
+			menu2.SetTitle(title);
+			menu2.DrawText("(-) All flamethrowers have 50% less ammo.");
 		}
 		else if (class == TFClass_DemoMan)
 		{
-			menu2.SetTitle("%s Demoman (Survivor)", MESSAGE_PREFIX_NO_COLOR);
-			menu2.AddItem("x", "(-) Sticky Jumper replaced with Stickybomb Launcher.", ITEMDRAW_RAWLINE);
+			Format(title, sizeof(title), "%s Demoman (Survivor)", MESSAGE_PREFIX_NO_COLOR);
+			menu2.SetTitle(title);
+			menu2.DrawText("(-) Sticky Jumper replaced with Stickybomb Launcher.");
 		}
 		else if (class == TFClass_Heavy)
 		{
-			menu2.SetTitle("%s Heavy (Survivor)", MESSAGE_PREFIX_NO_COLOR);
-			menu2.AddItem("x", "(-) All miniguns have 50% less ammo.", ITEMDRAW_RAWLINE);
+			Format(title, sizeof(title), "%s Heavy (Survivor)", MESSAGE_PREFIX_NO_COLOR);
+			menu2.SetTitle(title);
+			menu2.DrawText("(-) All miniguns have 50% less ammo.");
 		}
 		else if (class == TFClass_Engineer)
 		{
-			menu2.SetTitle("%s Engineer (Survivor)", MESSAGE_PREFIX_NO_COLOR);
-			menu2.AddItem("x", "(-) Cannot heal or upgrade Sentries.", ITEMDRAW_RAWLINE);
-			menu2.AddItem("x", "(+) Can build and upgrade 2 Dispensers at once.", ITEMDRAW_RAWLINE);
+			Format(title, sizeof(title), "%s Engineer (Survivor)", MESSAGE_PREFIX_NO_COLOR);
+			menu2.SetTitle(title);
+			menu2.DrawText("(-) Cannot heal or upgrade Sentries.");
+			menu2.DrawText("(+) Can build and upgrade 2 Dispensers at once.");
 		}
 		else if (class == TFClass_Medic)
 		{
-			menu2.SetTitle("%s Medic (Survivor)", MESSAGE_PREFIX_NO_COLOR);
-			menu2.AddItem("x", "(-) Vaccinator replaced with Quick-Fix.", ITEMDRAW_RAWLINE);
+			Format(title, sizeof(title), "%s Medic (Survivor)", MESSAGE_PREFIX_NO_COLOR);
+			menu2.SetTitle(title);
+			menu2.DrawText("(-) Vaccinator replaced with Quick-Fix.");
 		}
 		else
 			displayMenu = false;
@@ -1070,19 +1077,27 @@ public Action Command_Class(int client, int args)
 	{
 		if (class == TFClass_Engineer)
 		{
-			menu2.SetTitle("%s Engineer (Zombie)", MESSAGE_PREFIX_NO_COLOR);
-			menu2.AddItem("x", "(i) Can only build and upgrade Teleporters.", ITEMDRAW_RAWLINE);
+			Format(title, sizeof(title), "%s Engineer (Zombie)", MESSAGE_PREFIX_NO_COLOR);
+			menu2.SetTitle(title);
+			menu2.DrawText("(i) Can only build and upgrade Teleporters.");
 		}
 		else if (class == TFClass_Medic)
 		{
-			menu2.SetTitle("%s Medic (Zombie)", MESSAGE_PREFIX_NO_COLOR);
-			menu2.AddItem("x", "(+) Can perform a redirectless double jump.", ITEMDRAW_RAWLINE);
+			Format(title, sizeof(title), "%s Medic (Zombie)", MESSAGE_PREFIX_NO_COLOR);
+			menu2.SetTitle(title);
+			menu2.DrawText("(+) Can perform a redirectless double jump.");
+		}
+		else if (class == TFClass_Spy)
+		{
+			Format(title, sizeof(title), "%s Spy (Zombie)", MESSAGE_PREFIX_NO_COLOR);
+			menu2.SetTitle(title);
+			menu2.DrawText("(i) Cannot use any sappers.");
 		}
 		else
 			displayMenu = false;
 	}
 	if (displayMenu)
-		menu2.Display(client, 30);
+		menu2.Send(client, Handler_Nothing, 30);
 	return Plugin_Handled;
 }
 
