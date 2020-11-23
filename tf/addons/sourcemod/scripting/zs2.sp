@@ -128,7 +128,7 @@ public void OnPluginStart()
 	HookEvent("ctf_flag_captured", Event_OnCapture);
 	HookEvent("player_death", Event_OnDeath);
 	HookEvent("player_spawn", Event_OnSpawn);
-	HookEvent("player_upgradedobject", Event_OnUpgradeBuilding);
+	HookEvent("player_builtobject", Event_BuiltObject, EventHookMode_Pre);
 	HookEvent("post_inventory_application", Event_OnRegen);
 	HookEvent("teamplay_broadcast_audio", Event_Audio, EventHookMode_Pre);
 	HookEvent("teamplay_point_captured", Event_OnCapture);
@@ -770,7 +770,6 @@ Action OnWeaponSwitch(int client, int weapon) // TODO: Use build and destroy eve
 	}
 
 	return Plugin_Continue;
-
 }
 
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon)
@@ -905,14 +904,28 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 	}
 }
 
-Action Event_OnUpgradeBuilding(Event event, const char[] name, bool dontBroadcast)
+Action Event_BuiltObject(Event event, const char[] name, bool dontBroadcast)
 {
-	int ent = GetEventInt(event, "index");
+	int ent = event.GetInt("index");
+	int client = GetClientOfUserId(event.GetInt("userid")); 
 	char classname[32];
 	GetEdictClassname(ent, classname, sizeof(classname));
 
-	if (StrEqual(classname, "obj_sentrygun"))
-		SetEntProp(ent, Prop_Send, "m_iUpgradeLevel", 0);
+	if (StrEqual(classname, "obj_dispenser") && !GetEntProp(ent, Prop_Send, "m_bCarryDeploy"))
+	{
+		SetEntProp(ent, Prop_Send, "m_bCarried", 1);	// Disable healing/ammo and upgrading
+		SetEntProp(ent, Prop_Send, "m_iUpgradeMetalRequired", 200);
+		SetEntProp(ent, Prop_Send, "m_iObjectType", TFObject_Dispenser);
+
+		ent = -1;
+		while ((ent = FindEntityByClassname(ent, "obj_dispenser")) != -1)
+		{
+			if (GetEntPropEnt(ent, Prop_Send, "m_hBuilder") != client)
+				continue;
+
+			SetEntProp(ent, Prop_Send, "m_iObjectType", TFObject_Dispenser);
+		}
+	}
 }
 
 Action Event_OnHealBuilding(Event event, const char[] name, bool dontBroadcast)
@@ -1026,49 +1039,43 @@ public Action Command_Class(int client, int args)
 		PrintToServer("%s This command cannot be executed by the server console.", MESSAGE_PREFIX_NO_COLOR);
 		return Plugin_Handled;
 	}
+
 	TFClassType class = TF2_GetPlayerClass(client);
 	int team = GetClientTeam(client);
 	bool displayMenu = true;
-	Panel menu2 = new Panel();
-	char title[32];
+	Menu menu = new Menu(Handler_Nothing);
 	if (team == TEAM_SURVIVORS)
 	{
 		if (class == TFClass_Soldier)
 		{
-			Format(title, sizeof(title), "%s Soldier (Survivor)", MESSAGE_PREFIX_NO_COLOR);
-			menu2.SetTitle(title);
-			menu2.DrawText("(i) Rocket Jumper replaced with Rocket Launcher.");
+			menu.SetTitle("%s Soldier (Survivor)", MESSAGE_PREFIX_NO_COLOR);
+			menu.AddItem("x", "(i) Rocket Jumper replaced with Rocket Launcher.", ITEMDRAW_RAWLINE);
 		}
 		else if (class == TFClass_Pyro)
 		{
-			Format(title, sizeof(title), "%s Pyro (Survivor)", MESSAGE_PREFIX_NO_COLOR);
-			menu2.SetTitle(title);
-			menu2.DrawText("(-) All flamethrowers have 50% less ammo.");
+			menu.SetTitle("%s Pyro (Survivor)", MESSAGE_PREFIX_NO_COLOR);
+			menu.AddItem("x", "(-) All flamethrowers have 50% less ammo.", ITEMDRAW_RAWLINE);
 		}
 		else if (class == TFClass_DemoMan)
 		{
-			Format(title, sizeof(title), "%s Demoman (Survivor)", MESSAGE_PREFIX_NO_COLOR);
-			menu2.SetTitle(title);
-			menu2.DrawText("(-) Sticky Jumper replaced with Stickybomb Launcher.");
+			menu.SetTitle("%s Demoman (Survivor)", MESSAGE_PREFIX_NO_COLOR);
+			menu.AddItem("x", "(-) Sticky Jumper replaced with Stickybomb Launcher.", ITEMDRAW_RAWLINE);
 		}
 		else if (class == TFClass_Heavy)
 		{
-			Format(title, sizeof(title), "%s Heavy (Survivor)", MESSAGE_PREFIX_NO_COLOR);
-			menu2.SetTitle(title);
-			menu2.DrawText("(-) All miniguns have 50% less ammo.");
+			menu.SetTitle("%s Heavy (Survivor)", MESSAGE_PREFIX_NO_COLOR);
+			menu.AddItem("x", "(-) All miniguns have 50% less ammo.", ITEMDRAW_RAWLINE);
 		}
 		else if (class == TFClass_Engineer)
 		{
-			Format(title, sizeof(title), "%s Engineer (Survivor)", MESSAGE_PREFIX_NO_COLOR);
-			menu2.SetTitle(title);
-			menu2.DrawText("(-) Cannot heal or upgrade Sentries.");
-			menu2.DrawText("(+) Can build and upgrade 2 Dispensers at once.");
+			menu.SetTitle("%s Engineer (Survivor)", MESSAGE_PREFIX_NO_COLOR);
+			menu.AddItem("x", "(-) Cannot heal or upgrade Sentries.", ITEMDRAW_RAWLINE);
+			menu.AddItem("x", "(+) Can build and upgrade 2 Dispensers at once.", ITEMDRAW_RAWLINE);
 		}
 		else if (class == TFClass_Medic)
 		{
-			Format(title, sizeof(title), "%s Medic (Survivor)", MESSAGE_PREFIX_NO_COLOR);
-			menu2.SetTitle(title);
-			menu2.DrawText("(-) Vaccinator replaced with Quick-Fix.");
+			menu.SetTitle("%s Medic (Survivor)", MESSAGE_PREFIX_NO_COLOR);
+			menu.AddItem("x", "(-) Vaccinator replaced with Quick-Fix.", ITEMDRAW_RAWLINE);
 		}
 		else
 			displayMenu = false;
@@ -1077,27 +1084,19 @@ public Action Command_Class(int client, int args)
 	{
 		if (class == TFClass_Engineer)
 		{
-			Format(title, sizeof(title), "%s Engineer (Zombie)", MESSAGE_PREFIX_NO_COLOR);
-			menu2.SetTitle(title);
-			menu2.DrawText("(i) Can only build and upgrade Teleporters.");
+			menu.SetTitle("%s Engineer (Zombie)", MESSAGE_PREFIX_NO_COLOR);
+			menu.AddItem("x", "(i) Can only build and upgrade Teleporters.", ITEMDRAW_RAWLINE);
 		}
 		else if (class == TFClass_Medic)
 		{
-			Format(title, sizeof(title), "%s Medic (Zombie)", MESSAGE_PREFIX_NO_COLOR);
-			menu2.SetTitle(title);
-			menu2.DrawText("(+) Can perform a redirectless double jump.");
-		}
-		else if (class == TFClass_Spy)
-		{
-			Format(title, sizeof(title), "%s Spy (Zombie)", MESSAGE_PREFIX_NO_COLOR);
-			menu2.SetTitle(title);
-			menu2.DrawText("(i) Cannot use any sappers.");
+			menu.SetTitle("%s Medic (Zombie)", MESSAGE_PREFIX_NO_COLOR);
+			menu.AddItem("x", "(+) Can perform a redirectless double jump.", ITEMDRAW_RAWLINE);
 		}
 		else
 			displayMenu = false;
 	}
 	if (displayMenu)
-		menu2.Send(client, Handler_Nothing, 30);
+		menu.Display(client, 30);
 	return Plugin_Handled;
 }
 
