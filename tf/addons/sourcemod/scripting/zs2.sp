@@ -272,6 +272,7 @@ public void OnConfigsExecuted()
 	FindConVar("tf_ctf_bonus_time").SetInt(0);
 	FindConVar("tf_flag_caps_per_round").SetInt(2);
 	FindConVar("tf_forced_holiday").SetInt(2);
+	FindConVar("tf_sentrygun_metal_per_shell").SetInt(201);
 	FindConVar("tf_weapon_criticals").SetInt(0);
 }
 
@@ -313,6 +314,21 @@ public void OnClientDisconnect(int client)
 	queuePoints[client] = 0;
 	damageDealt[client] = 0;
 	selectedAsSurvivor[client] = false;
+	
+	bool serverEmpty = true;
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsValidClient(i))
+		{
+			serverEmpty = false;
+			break;
+		}
+	}
+	if (serverEmpty)
+	{
+		DebugText("No players left, reverting to waiting for players mode");
+		waitingForPlayers = true;
+	}
 }
 
 Action Timer_DisplayIntro(Handle timer, int client)
@@ -404,8 +420,6 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 				SetEntityMoveType(i, MOVETYPE_NONE);
 			else
 				SetEntityMoveType(i, MOVETYPE_WALK);
-			
-			CreateTimer(0.5, Timer_CommandClass, i);
 		}
 	}
 	
@@ -716,8 +730,6 @@ Action Listener_JoinClass(int client, const char[] command, int args)
 			return Plugin_Handled;
 		}
 	}
-
-	CreateTimer(0.5, Timer_CommandClass, client);
 	return Plugin_Continue;
 }
 
@@ -836,6 +848,8 @@ Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 		else
 			SetEntityMoveType(player, MOVETYPE_WALK);
 	}
+	
+	Command_Class(player, 0);
 }
 
 Action Event_OnRegen(Event event, const char[] name, bool dontBroadcast)
@@ -929,7 +943,7 @@ Action Event_BuiltObject(Event event, const char[] name, bool dontBroadcast)
 
 	if (objectType == TFObject_Dispenser && !GetEntProp(ent, Prop_Send, "m_bCarryDeploy"))
 	{
-		SetEntProp(ent, Prop_Send, "m_bCarried", 1); // Dispenser won't give ammo and won't heal people
+		SetEntProp(ent, Prop_Send, "m_bCarried", 0); // Allow ammo collection and healing
 	}
 }
 
@@ -1068,38 +1082,38 @@ public Action Command_Class(int client, int args)
 		{
 			Format(title, sizeof(title), "%s Soldier (Survivor)", MESSAGE_PREFIX_NO_COLOR);
 			menu2.SetTitle(title);
-			menu2.DrawText("(i) Rocket Jumper replaced with Rocket Launcher.");
+			menu2.DrawText("- Rocket Jumper replaced with Rocket Launcher.");
 		}
 		else if (class == TFClass_Pyro)
 		{
 			Format(title, sizeof(title), "%s Pyro (Survivor)", MESSAGE_PREFIX_NO_COLOR);
 			menu2.SetTitle(title);
-			menu2.DrawText("(-) All flamethrowers have 50% less ammo.");
+			menu2.DrawText("- All flamethrowers have 50% less ammo.");
 		}
 		else if (class == TFClass_DemoMan)
 		{
 			Format(title, sizeof(title), "%s Demoman (Survivor)", MESSAGE_PREFIX_NO_COLOR);
 			menu2.SetTitle(title);
-			menu2.DrawText("(-) Sticky Jumper replaced with Stickybomb Launcher.");
+			menu2.DrawText("- Sticky Jumper replaced with Stickybomb Launcher.");
 		}
 		else if (class == TFClass_Heavy)
 		{
 			Format(title, sizeof(title), "%s Heavy (Survivor)", MESSAGE_PREFIX_NO_COLOR);
 			menu2.SetTitle(title);
-			menu2.DrawText("(-) All miniguns have 50% less ammo.");
+			menu2.DrawText("- All miniguns have 50% less ammo.");
 		}
 		else if (class == TFClass_Engineer)
 		{
 			Format(title, sizeof(title), "%s Engineer (Survivor)", MESSAGE_PREFIX_NO_COLOR);
 			menu2.SetTitle(title);
-			menu2.DrawText("(-) Cannot heal or upgrade Sentries.");
-			menu2.DrawText("(+) Can build and upgrade 2 Dispensers at once.");
+			menu2.DrawText("- Cannot upgrade Sentries or Dispensers.");
+			menu2.DrawText("- Can build 2 Dispensers at once.");
 		}
 		else if (class == TFClass_Medic)
 		{
 			Format(title, sizeof(title), "%s Medic (Survivor)", MESSAGE_PREFIX_NO_COLOR);
 			menu2.SetTitle(title);
-			menu2.DrawText("(-) Vaccinator replaced with Quick-Fix.");
+			menu2.DrawText("- Vaccinator replaced with Quick-Fix.");
 		}
 		else
 			displayMenu = false;
@@ -1110,25 +1124,25 @@ public Action Command_Class(int client, int args)
 		{
 			Format(title, sizeof(title), "%s Engineer (Zombie)", MESSAGE_PREFIX_NO_COLOR);
 			menu2.SetTitle(title);
-			menu2.DrawText("(i) Can only build and upgrade Teleporters.");
+			menu2.DrawText("- Can only build Teleporters.");
 		}
 		else if (class == TFClass_Medic)
 		{
 			Format(title, sizeof(title), "%s Medic (Zombie)", MESSAGE_PREFIX_NO_COLOR);
 			menu2.SetTitle(title);
-			menu2.DrawText("(+) Can perform a redirectless double jump.");
+			menu2.DrawText("- Can perform a redirectless double jump.");
 		}
 		else if (class == TFClass_Spy)
 		{
 			Format(title, sizeof(title), "%s Spy (Zombie)", MESSAGE_PREFIX_NO_COLOR);
 			menu2.SetTitle(title);
-			menu2.DrawText("(i) Cannot use any sappers.");
+			menu2.DrawText("- Cannot use any sappers.");
 		}
 		else
 			displayMenu = false;
 	}
 	if (displayMenu)
-		menu2.Send(client, Handler_Nothing, 30);
+		menu2.Send(client, Handler_Nothing, 10);
 	return Plugin_Handled;
 }
 
@@ -1153,11 +1167,6 @@ Action Timer_CalcQueuePoints(Handle timer)
 			queuePoints[i] += 10;
 		}
 	}
-}
-
-Action Timer_CommandClass(Handle timer, int client)
-{
-	Command_Class(client, 0);
 }
 
 Action Timer_PlaytimePoints(Handle timer)
