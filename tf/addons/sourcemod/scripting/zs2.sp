@@ -52,7 +52,9 @@ int roundTimer,
 	TEAM_SURVIVORS,
 	TEAM_ZOMBIES,
 	queuePoints[MAXPLAYERS+1],
-	damageDealt[MAXPLAYERS+1];
+	damageDealt[MAXPLAYERS+1],
+	g_LastButtons[MAXPLAYERS+1],
+	jumpCount[MAXPLAYERS+1];
 public const char objectiveEntities[6][32] = {
 	"team_control_point_master",
 	"team_control_point",
@@ -847,6 +849,33 @@ Action OnWeaponSwitch(int client, int weapon) // TODO: Use build and destroy eve
 
 	return Plugin_Continue;
 
+}
+
+public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon)
+{
+	if (TF2_GetPlayerClass(client) == TFClass_Medic)
+	{
+		if ((buttons & IN_JUMP) && !(g_LastButtons[client] & IN_JUMP) && !(GetEntityFlags(client) & FL_ONGROUND) && jumpCount[client] < 1)
+		{
+			DoClientDoubleJump(client);
+		}
+		else if(GetEntityFlags(client) & FL_ONGROUND)
+		{
+			jumpCount[client] = 0;
+		}
+	}
+
+	g_LastButtons[client] = buttons;
+	return Plugin_Continue;
+}
+
+void DoClientDoubleJump(int client)
+{
+	jumpCount[client]++;
+	float vVel[3];
+	GetEntPropVector(client, Prop_Data, "m_vecVelocity", vVel);
+	vVel[2] = 280.0;
+	TeleportEntity(client, NULL_VECTOR, NULL_VECTOR, vVel);
 }
 
 /* Client events
