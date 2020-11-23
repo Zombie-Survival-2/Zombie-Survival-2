@@ -405,7 +405,7 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 			else
 				SetEntityMoveType(i, MOVETYPE_WALK);
 			
-			Command_Class(i, 0);
+			CreateTimer(0.5, Timer_CommandClass, client);
 		}
 	}
 	
@@ -717,7 +717,7 @@ Action Listener_JoinClass(int client, const char[] command, int args)
 		}
 	}
 
-	Command_Class(client, 0);
+	CreateTimer(0.5, Timer_CommandClass, client);
 	return Plugin_Continue;
 }
 
@@ -1153,6 +1153,11 @@ Action Timer_CalcQueuePoints(Handle timer)
 			queuePoints[i] += 10;
 		}
 	}
+}
+
+Action Timer_CommandClass(Handle timer, int client)
+{
+	Command_Class(client, 0);
 }
 
 Action Timer_PlaytimePoints(Handle timer)
