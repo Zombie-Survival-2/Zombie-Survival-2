@@ -151,15 +151,22 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_zs_next", Command_Next);
 	RegConsoleCmd("sm_zs2next", Command_Next);
 	RegConsoleCmd("sm_zs2_next", Command_Next);
-	RegConsoleCmd("sm_zsreset", Command_Reset);
-	RegConsoleCmd("sm_zs_reset", Command_Reset);
-	RegConsoleCmd("sm_zs2reset", Command_Reset);
-	RegConsoleCmd("sm_zs2_reset", Command_Reset);
 	RegConsoleCmd("sm_zsqueue", Command_Next);
 	RegConsoleCmd("sm_zs_queue", Command_Next);
 	RegConsoleCmd("sm_zs2queue", Command_Next);
 	RegConsoleCmd("sm_zs2_queue", Command_Next);
-	RegAdminCmd("sm_queuepoints", GivePoints, ADMFLAG_ROOT);
+	RegConsoleCmd("sm_zsreset", Command_Reset);
+	RegConsoleCmd("sm_zs_reset", Command_Reset);
+	RegConsoleCmd("sm_zs2reset", Command_Reset);
+	RegConsoleCmd("sm_zs2_reset", Command_Reset);
+	RegConsoleCmd("sm_zsclass", Command_Class);
+	RegConsoleCmd("sm_zs_class", Command_Class);
+	RegConsoleCmd("sm_zs2class", Command_Class);
+	RegConsoleCmd("sm_zs2_class", Command_Class);
+	RegAdminCmd("sm_zsmaxpoints", AdminCommand_MaxPoints, ADMFLAG_ROOT);
+	RegAdminCmd("sm_zs_maxpoints", AdminCommand_MaxPoints, ADMFLAG_ROOT);
+	RegAdminCmd("sm_zs2maxpoints", AdminCommand_MaxPoints, ADMFLAG_ROOT);
+	RegAdminCmd("sm_zs2_maxpoints", AdminCommand_MaxPoints, ADMFLAG_ROOT);
 
 	// Listeners
 	AddCommandListener(Listener_Build, "build");
@@ -383,6 +390,8 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 				SetEntityMoveType(i, MOVETYPE_NONE);
 			else
 				SetEntityMoveType(i, MOVETYPE_WALK);
+			
+			Command_Class(i, 0);
 		}
 	}
 	
@@ -694,6 +703,7 @@ Action Listener_JoinClass(int client, const char[] command, int args)
 		}
 	}
 
+	Command_Class(client, 0);
 	return Plugin_Continue;
 }
 
@@ -980,13 +990,77 @@ public Action Command_Reset(int client, int args)
 	return Plugin_Handled;
 }
 
-public Action GivePoints(int client, int args)
+public Action Command_Class(int client, int args)
+{
+	if (client == 0)
+	{
+		PrintToServer("%s This command cannot be executed by the server console.", MESSAGE_PREFIX_NO_COLOR);
+		return Plugin_Handled;
+	}
+	TFClassType class = TF2_GetPlayerClass(client);
+	int team = GetClientTeam(client);
+	bool displayMenu = true;
+	Menu menu2 = new Menu(Handler_Nothing);
+	if (team == TEAM_SURVIVORS)
+	{
+		if (class == TFClass_Soldier)
+		{
+			menu2.SetTitle("%s Soldier (Survivor)", MESSAGE_PREFIX_NO_COLOR);
+			menu2.AddItem("x", "(i) Rocket Jumper replaced with Rocket Launcher.", ITEMDRAW_RAWLINE);
+		}
+		else if (class == TFClass_Pyro)
+		{
+			menu2.SetTitle("%s Pyro (Survivor)", MESSAGE_PREFIX_NO_COLOR);
+			menu2.AddItem("x", "(-) All flamethrowers have 50% less ammo.", ITEMDRAW_RAWLINE);
+		}
+		else if (class == TFClass_DemoMan)
+		{
+			menu2.SetTitle("%s Demoman (Survivor)", MESSAGE_PREFIX_NO_COLOR);
+			menu2.AddItem("x", "(-) Sticky Jumper replaced with Stickybomb Launcher.", ITEMDRAW_RAWLINE);
+		}
+		else if (class == TFClass_Heavy)
+		{
+			menu2.SetTitle("%s Heavy (Survivor)", MESSAGE_PREFIX_NO_COLOR);
+			menu2.AddItem("x", "(-) All miniguns have 50% less ammo.", ITEMDRAW_RAWLINE);
+		}
+		else if (class == TFClass_Engineer)
+		{
+			menu2.SetTitle("%s Engineer (Survivor)", MESSAGE_PREFIX_NO_COLOR);
+			menu2.AddItem("x", "(-) Cannot heal or upgrade Sentries.", ITEMDRAW_RAWLINE);
+			menu2.AddItem("x", "(+) Can build and upgrade 2 Dispensers at once.", ITEMDRAW_RAWLINE);
+		}
+		else if (class == TFClass_Medic)
+		{
+			menu2.SetTitle("%s Medic (Survivor)", MESSAGE_PREFIX_NO_COLOR);
+			menu2.AddItem("x", "(-) Vaccinator replaced with Quick-Fix.", ITEMDRAW_RAWLINE);
+		}
+		else
+			displayMenu = false;
+	}
+	else if (team == TEAM_ZOMBIES)
+	{
+		if (class == TFClass_Engineer)
+		{
+			menu2.SetTitle("%s Engineer (Zombie)", MESSAGE_PREFIX_NO_COLOR);
+			menu2.AddItem("x", "(i) Can only build and upgrade Teleporters.", ITEMDRAW_RAWLINE);
+		}
+		else if (class == TFClass_Medic)
+		{
+			menu2.SetTitle("%s Medic (Zombie)", MESSAGE_PREFIX_NO_COLOR);
+			menu2.AddItem("x", "(+) Can perform a redirectless double jump.", ITEMDRAW_RAWLINE);
+		}
+		else
+			displayMenu = false;
+	}
+	if (displayMenu)
+		menu2.Display(client, 30);
+	return Plugin_Handled;
+}
+
+public Action AdminCommand_MaxPoints(int client, int args)
 {
 	if (smDebug.BoolValue)
-	{
 		queuePoints[client] = 999;
-	}
-	
 	return Plugin_Handled;
 }
 
