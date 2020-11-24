@@ -126,7 +126,6 @@ public void OnPluginStart()
 	// Events
 	HookEvent("building_healed", Event_OnHealBuilding);
 	HookEvent("ctf_flag_captured", Event_OnCapture);
-	HookEvent("player_builtobject", Event_BuiltObject);
 	HookEvent("player_dropobject", Event_DropObject);
 	HookEvent("player_death", Event_OnDeath);
 	HookEvent("player_spawn", Event_OnSpawn);
@@ -174,7 +173,9 @@ public void OnPluginStart()
 	// Listeners
 	AddCommandListener(Listener_Build, "build");
 	AddCommandListener(Listener_JoinClass, "joinclass");
+	AddCommandListener(Listener_JoinTeam, "autoteam");
 	AddCommandListener(Listener_JoinTeam, "jointeam");
+	AddCommandListener(Listener_JoinTeam, "spectate");
 
 	// Translations
 	LoadTranslations("common.phrases");
@@ -684,24 +685,76 @@ Action Event_Audio(Event event, const char[] name, bool dontBroadcast)
 
 Action Listener_JoinTeam(int client, const char[] command, int args)
 {
-	char chosenTeam[8];
-	GetCmdArg(1, chosenTeam, sizeof(chosenTeam));
+	char sArg[32], survTeam[16], zombTeam[16], vgui[16];
 	
-	if (StrContains(chosenTeam, "spec", false) > -1 && !CheckCommandAccess(client, "", ADMFLAG_KICK, true))
-	{
-		EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
+	if (args < 1 && StrEqual(command, "jointeam", false))
 		return Plugin_Handled;
-	}
 	
 	if (waitingForPlayers)
 		return Plugin_Continue;
 	
-	if (StrContains(chosenTeam, "red", false) > -1 && roundStarted)
+	if (!IsValidClient(client))
+		return Plugin_Continue;
+
+	if (setupTime)
 	{
-		EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
+		CPrintToChat(client, "%s No team switch during setup time.", MESSAGE_PREFIX);
 		return Plugin_Handled;
 	}
-
+	
+	//Get command/arg on which team player joined
+	if (StrEqual(command, "jointeam", false)) //This is done because "jointeam spectate" should take priority over "spectate"
+		GetCmdArg(1, sArg, sizeof(sArg));
+	else if (StrEqual(command, "spectate", false))
+		strcopy(sArg, sizeof(sArg), "spectate");	
+	else if (StrEqual(command, "autoteam", false))
+		strcopy(sArg, sizeof(sArg), "autoteam");		
+	
+	//Assign team-specific strings
+	if (TEAM_ZOMBIES == TEAM_BLUE)
+	{
+		survTeam = "red";
+		zombTeam = "blue";
+		vgui = "class_blue";
+	}
+	else
+	{
+		survTeam = "blue";
+		zombTeam = "red";
+		vgui = "class_red";
+	}
+	
+	if (roundStarted)
+	{
+		//If client tries to join the survivor team or a random team
+		//during an active round, place them on the zombie
+		//team and present them with the zombie class select screen.
+		if (StrEqual(sArg, survTeam, false) || StrEqual(sArg, "auto", false))
+		{
+			ChangeClientTeam(client, TEAM_ZOMBIES);
+			ShowVGUIPanel(client, vgui);
+			CPrintToChat(client, "%s You cannot be survivor, forced to join zombie team.", MESSAGE_PREFIX);
+			return Plugin_Handled;
+		}
+		//If client tries to join the zombie team
+		//during an active round, let them do so.
+		else if (StrEqual(sArg, zombTeam, false))
+		{
+			return Plugin_Continue;
+		}
+		// spec
+		else if (StrEqual(sArg, "spectate", false))
+		{
+			if(!CheckCommandAccess(client, "", ADMFLAG_KICK, true))
+				return Plugin_Handled;
+			
+			return Plugin_Continue;
+		}
+		//Prevent joining any other team.
+		else
+			return Plugin_Handled;
+	}
+	
 	return Plugin_Continue;
 }
 
@@ -879,11 +932,14 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 		{
 			EmitSoundToClient(victim, "zs2/death.mp3", victim);
 
-			int survivorsLiving = -1;
+			int survivorsLiving = -1, survAlive;
 			for (int i = 1; i <= MaxClients; i++)
 			{
 				if (IsValidClient(i) && GetClientTeam(i) == TEAM_SURVIVORS && IsPlayerAlive(i))
+				{
 					survivorsLiving++;
+					survAlive = i;
+				}
 			}
 
 			if (survivorsLiving >= 1)
@@ -891,12 +947,7 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 				RequestFrame(Zombie_Setup, victim);
 				if (survivorsLiving == 1)
 				{
-					for (int i = 1; i <= MaxClients; i++)
-					{
-						// Need a way to stop this sound when the round is over
-						if (IsValidClient(i))
-							EmitSoundToClient(i, "zs2/oneleft.mp3", i);
-					}
+					EmitSoundToAll("zs2/oneleft.mp3", survAlive);
 				}
 			}
 			else
@@ -927,17 +978,6 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 	}
 }
 
-Action Event_BuiltObject(Event event, const char[] name, bool dontBroadcast)
-{
-	int ent = event.GetInt("index");
-	TFObjectType objectType = view_as<TFObjectType>(event.GetInt("object"));
-
-	if (objectType == TFObject_Dispenser && !GetEntProp(ent, Prop_Send, "m_bCarryDeploy"))
-	{
-		SetEntProp(ent, Prop_Send, "m_bCarried", 0); // Allow ammo collection and healing
-	}
-}
-
 Action Event_DropObject(Event event, const char[] name, bool dontBroadcast)
 {
 	int ent = event.GetInt("index");
@@ -965,8 +1005,7 @@ Action Event_OnHealBuilding(Event event, const char[] name, bool dontBroadcast)
 
 void Survivor_Setup(const int client)
 {
-	if (GetClientTeam(client) != TEAM_SURVIVORS)
-		ChangeClientTeam(client, TEAM_SURVIVORS);
+	ChangeClientTeam(client, TEAM_SURVIVORS);
 	queuePoints[client] = 0;
 	TF2_RespawnPlayer(client);
 	TF2_RegeneratePlayer(client);
@@ -977,13 +1016,8 @@ void Survivor_Setup(const int client)
 
 void Zombie_Setup(const int client)
 {
-	if (GetClientTeam(client) != TEAM_ZOMBIES)
-		ChangeClientTeam(client, TEAM_ZOMBIES);
-
+	ChangeClientTeam(client, TEAM_ZOMBIES);
 	TF2_RespawnPlayer(client);
-
-	OnlyMelee(client);
-	RemoveWearable(client);
 }
 
 /* Commands
