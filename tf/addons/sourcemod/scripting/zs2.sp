@@ -23,7 +23,7 @@
 // Defines
 #define MESSAGE_PREFIX "{collectors}[ZS2]"
 #define MESSAGE_PREFIX_NO_COLOR "[ZS2]"
-#define PLUGIN_VERSION "0.1.1 Beta"
+#define PLUGIN_VERSION "0.1.1"
 #define MOTD_VERSION "0.1"
 #define IsValidClient(%1) (1 <= %1 <= MaxClients && IsClientInGame(%1))
 
@@ -1142,7 +1142,10 @@ public Action Command_Class(int client, int args)
 			displayMenu = false;
 	}
 	if (displayMenu)
+	{
+		menu2.DrawItem("Exit", ITEMDRAW_CONTROL);
 		menu2.Send(client, Handler_Nothing, 10);
+	}
 	return Plugin_Handled;
 }
 
