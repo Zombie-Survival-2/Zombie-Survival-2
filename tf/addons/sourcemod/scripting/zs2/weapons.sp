@@ -53,7 +53,8 @@ stock void WeaponCheck(int client)
 	if (!IsValidClient(client) || !IsPlayerAlive(client))
 		return;
 
-	if (GetClientTeam(client) == TEAM_ZOMBIES)
+	int team = GetClientTeam(client);
+	if (team == TEAM_ZOMBIES)
 	{		
 		OnlyMelee(client);
 		RemoveWearable(client);
@@ -89,12 +90,14 @@ stock void WeaponCheck(int client)
 				}
 			}
 			
-			//This will refresh health max calculation and other attributes
-			TF2Attrib_ClearCache(iEntity);
+			TF2Attrib_ClearCache(iEntity); // This will refresh health max calculation and other attributes
 		}
 	}
 
-	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 2));
+	if (team == TEAM_SURVIVORS)
+		SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 0));
+	else
+		SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 2));
 }
 
 stock void OnlyMelee(const int client)

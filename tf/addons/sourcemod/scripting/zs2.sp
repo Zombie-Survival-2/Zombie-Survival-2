@@ -688,32 +688,26 @@ Action Event_Audio(Event event, const char[] name, bool dontBroadcast)
 
 Action Listener_JoinTeam(int client, const char[] command, int args)
 {
-	char sArg[32], survTeam[16], zombTeam[16], vgui[16];
-	
-	if (args < 1 && StrEqual(command, "jointeam", false))
+	// Do not permit empty jointeam command
+	if (!args && StrEqual(command, "jointeam", false))
 		return Plugin_Handled;
-	
-	if (waitingForPlayers)
-		return Plugin_Continue;
-	
+	// Allow all commands for invalid clients
 	if (!IsValidClient(client))
 		return Plugin_Continue;
 
-	if (setupTime)
-	{
-		CPrintToChat(client, "%s No team switch during setup time.", MESSAGE_PREFIX);
-		return Plugin_Handled;
-	}
-	
-	//Get command/arg on which team player joined
-	if (StrEqual(command, "jointeam", false)) //This is done because "jointeam spectate" should take priority over "spectate"
+	char sArg[32],
+		survTeam[16],
+		zombTeam[16],
+		vgui[16];
+	// Get command/arg on which team player joined
+	if (StrEqual(command, "jointeam", false)) // "jointeam spectate" takes priority
 		GetCmdArg(1, sArg, sizeof(sArg));
 	else if (StrEqual(command, "spectate", false))
 		strcopy(sArg, sizeof(sArg), "spectate");	
 	else if (StrEqual(command, "autoteam", false))
 		strcopy(sArg, sizeof(sArg), "autoteam");		
 	
-	//Assign team-specific strings
+	// Assign team-specific strings
 	if (TEAM_ZOMBIES == TEAM_BLUE)
 	{
 		survTeam = "red";
@@ -727,43 +721,71 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 		vgui = "class_red";
 	}
 	
-	if (roundStarted)
+	if (waitingForPlayers)
 	{
-		//If client tries to join the survivor team or a random team
-		//during an active round, place them on the zombie
-		//team and present them with the zombie class select screen.
-		if (StrEqual(sArg, survTeam, false) || StrEqual(sArg, "auto", false))
-		{
-			ChangeClientTeam(client, TEAM_ZOMBIES);
-			ShowVGUIPanel(client, vgui);
-			CPrintToChat(client, "%s You cannot be survivor, forced to join zombie team.", MESSAGE_PREFIX);
-			return Plugin_Handled;
-		}
-		//If client tries to join the zombie team
-		//during an active round, let them do so.
-		else if (StrEqual(sArg, zombTeam, false))
-		{
+		// Let anyone join any team
+		if (StrEqual(sArg, survTeam, false) || StrEqual(sArg, zombTeam, false) || StrEqual(sArg, "auto", false))
 			return Plugin_Continue;
-		}
-		// spec
+		// If client tries to join spectator, place them on zombie team with zombie class select unless they have permission
 		else if (StrEqual(sArg, "spectate", false))
 		{
-			if(!CheckCommandAccess(client, "", ADMFLAG_KICK, true))
+			if (!CheckCommandAccess(client, "", ADMFLAG_KICK, true))
+			{
+				ChangeClientTeam(client, TEAM_ZOMBIES);
+				ShowVGUIPanel(client, vgui);
+				CPrintToChat(client, "%s {haunted}You do not have permission to spectate.", MESSAGE_PREFIX);
+				EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 				return Plugin_Handled;
+			}
 			
 			return Plugin_Continue;
 		}
-		//Prevent joining any other team.
 		else
 			return Plugin_Handled;
 	}
-	
-	return Plugin_Continue;
+	else
+	{
+		// If client tries to join survivor team, place them on zombie team with zombie class select
+		if (StrEqual(sArg, survTeam, false))
+		{
+			ChangeClientTeam(client, TEAM_ZOMBIES);
+			ShowVGUIPanel(client, vgui);
+			CPrintToChat(client, "%s {haunted}You cannot switch to the survivor team during a round.", MESSAGE_PREFIX);
+			EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
+			return Plugin_Handled;
+		}
+		// Same procedure for autoteam but without warnings
+		else if (StrEqual(sArg, "auto", false))
+		{
+			ChangeClientTeam(client, TEAM_ZOMBIES);
+			ShowVGUIPanel(client, vgui);
+			return Plugin_Handled;
+		}
+		// Let anyone join zombie team
+		else if (StrEqual(sArg, zombTeam, false))
+			return Plugin_Continue;
+		// If client tries to join spectator, place them on zombie team with zombie class select unless they have permission
+		else if (StrEqual(sArg, "spectate", false))
+		{
+			if (!CheckCommandAccess(client, "", ADMFLAG_KICK, true))
+			{
+				ChangeClientTeam(client, TEAM_ZOMBIES);
+				ShowVGUIPanel(client, vgui);
+				CPrintToChat(client, "%s {haunted}You do not have permission to spectate.", MESSAGE_PREFIX);
+				EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
+				return Plugin_Handled;
+			}
+			
+			return Plugin_Continue;
+		}
+		else
+			return Plugin_Handled;
+	}
 }
 
 Action Listener_JoinClass(int client, const char[] command, int args)
 {
-	if(!args)
+	if (!args)
 		return Plugin_Continue;
 
 	char chosenClass[32];
@@ -774,9 +796,12 @@ Action Listener_JoinClass(int client, const char[] command, int args)
 		if (!setupTime && IsPlayerAlive(client))
 			return Plugin_Handled;
 
-		// TODO: Need to allow survivor to switch to their own class
-		if (!IsAllowedClass(client, TF2_GetClass(chosenClass)))
+		// Allow survivor to switch to their own class but not to one occupied by someone else
+		if (TF2_GetPlayerClass(client) == TF2_GetClass(chosenClass))
+			return Plugin_Continue;
+		else if (!IsAllowedClass(client, TF2_GetClass(chosenClass)))
 		{
+			CPrintToChat(client, "%s {haunted}You cannot be a class that someone else on the survivor team already is.", MESSAGE_PREFIX);
 			EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 			return Plugin_Handled;
 		}
@@ -1105,15 +1130,13 @@ public Action Command_Class(int client, int args)
 	}
 
 	TFClassType class;
-	if(args == 0)
-	{
+	if (!args)
 		class = TF2_GetPlayerClass(client);
-	}
 	else
 	{
 		char arg[32];
 		GetCmdArg(1, arg, sizeof(arg));
-		if(StrEqual(arg, "heavy"))
+		if (StrEqual(arg, "heavy"))
 			arg = "heavyweapons";
 		class = TF2_GetClass(arg);
 	}
