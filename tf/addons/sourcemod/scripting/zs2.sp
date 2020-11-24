@@ -315,16 +315,7 @@ public void OnClientDisconnect(int client)
 	damageDealt[client] = 0;
 	selectedAsSurvivor[client] = false;
 	
-	bool serverEmpty = true;
-	for (int i = 1; i <= MaxClients; i++)
-	{
-		if (IsValidClient(i))
-		{
-			serverEmpty = false;
-			break;
-		}
-	}
-	if (serverEmpty)
+	if (GetClientCount() == 1) // GetClientCount is called before the player disconnects
 	{
 		DebugText("No players left, reverting to waiting for players mode");
 		waitingForPlayers = true;
