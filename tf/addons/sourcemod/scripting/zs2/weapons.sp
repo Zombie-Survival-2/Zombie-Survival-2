@@ -48,20 +48,20 @@ stock void Weapons_Initialise()
 	delete kv;
 }
 
-stock void WeaponCheck(int iClient)
+stock void WeaponCheck(int client)
 {
-	if (!IsValidClient(iClient) || !IsPlayerAlive(iClient))
+	if (!IsValidClient(client) || !IsPlayerAlive(client))
 		return;
 
-	if (GetClientTeam(iClient) == TEAM_ZOMBIES)
+	if (GetClientTeam(client) == TEAM_ZOMBIES)
 	{		
-		OnlyMelee(iClient);
-		RemoveWearable(iClient);
+		OnlyMelee(client);
+		RemoveWearable(client);
 	}
 	
 	for (int iSlot = 0; iSlot < 6; iSlot++)
 	{
-		int iEntity = GetPlayerWeaponSlot(iClient, iSlot);
+		int iEntity = GetPlayerWeaponSlot(client, iSlot);
 		if (iEntity > MaxClients)
 		{
 			int iIndex = GetEntProp(iEntity, Prop_Send, "m_iItemDefinitionIndex");
@@ -75,8 +75,8 @@ stock void WeaponCheck(int iClient)
 				{
 					if (wep.replaceIndex > -1)
 					{
-						TF2_RemoveWeaponSlot(iClient, iSlot);
-						iEntity = TF2Items_GiveWeapon2(iClient, wep.replaceIndex);
+						TF2_RemoveWeaponSlot(client, iSlot);
+						iEntity = TF2Items_GiveWeapon2(client, wep.replaceIndex);
 					}
 
 					char sAttribs[32][32];
@@ -93,6 +93,8 @@ stock void WeaponCheck(int iClient)
 			TF2Attrib_ClearCache(iEntity);
 		}
 	}
+
+	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 2));
 }
 
 stock void OnlyMelee(const int client)
