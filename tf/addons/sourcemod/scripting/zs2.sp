@@ -463,7 +463,10 @@ void Event_SetupFinished(Event event, const char[] name, bool dontBroadcast)
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (IsValidClient(i))
+		{
+			Command_Class(i, 0);
 			SetEntityMoveType(i, MOVETYPE_WALK);
+		}
 	}
 	
 	// Check if there are no survivors
@@ -760,13 +763,17 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 
 Action Listener_JoinClass(int client, const char[] command, int args)
 {
+	if(!args)
+		return Plugin_Continue;
+
+	char chosenClass[32];
+	GetCmdArg(1, chosenClass, sizeof(chosenClass));
+
 	if (!waitingForPlayers && GetClientTeam(client) == TEAM_SURVIVORS)
 	{
 		if (!setupTime && IsPlayerAlive(client))
 			return Plugin_Handled;
 
-		char chosenClass[16];
-		GetCmdArg(1, chosenClass, sizeof(chosenClass));
 		// TODO: Need to allow survivor to switch to their own class
 		if (!IsAllowedClass(client, TF2_GetClass(chosenClass)))
 		{
@@ -774,6 +781,8 @@ Action Listener_JoinClass(int client, const char[] command, int args)
 			return Plugin_Handled;
 		}
 	}
+
+	FakeClientCommand(client, "sm_zsclass %s", chosenClass);
 	return Plugin_Continue;
 }
 
@@ -892,8 +901,6 @@ Action Event_OnSpawn(Event event, const char[] name, bool dontBroadcast)
 		else
 			SetEntityMoveType(player, MOVETYPE_WALK);
 	}
-	
-	Command_Class(player, 0);
 }
 
 Action Event_OnRegen(Event event, const char[] name, bool dontBroadcast)
@@ -1096,7 +1103,21 @@ public Action Command_Class(int client, int args)
 		PrintToServer("%s This command cannot be executed by the server console.", MESSAGE_PREFIX_NO_COLOR);
 		return Plugin_Handled;
 	}
-	TFClassType class = TF2_GetPlayerClass(client);
+
+	TFClassType class;
+	if(args == 0)
+	{
+		class = TF2_GetPlayerClass(client);
+	}
+	else
+	{
+		char arg[32];
+		GetCmdArg(1, arg, sizeof(arg));
+		if(StrEqual(arg, "heavy"))
+			arg = "heavyweapons";
+		class = TF2_GetClass(arg);
+	}
+	
 	int team = GetClientTeam(client);
 	bool displayMenu = true;
 	Panel menu2 = new Panel();
