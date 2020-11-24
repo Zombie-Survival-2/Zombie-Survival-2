@@ -23,7 +23,7 @@
 // Defines
 #define MESSAGE_PREFIX "{collectors}[ZS2]"
 #define MESSAGE_PREFIX_NO_COLOR "[ZS2]"
-#define PLUGIN_VERSION "0.1.1"
+#define PLUGIN_VERSION "0.1.2 Beta"
 #define MOTD_VERSION "0.1"
 #define IsValidClient(%1) (1 <= %1 <= MaxClients && IsClientInGame(%1))
 
@@ -187,6 +187,7 @@ public void OnPluginStart()
 public void OnMapStart()
 {
 	roundStarted = false;
+	waitingForPlayers = true;
 
 	// Standard sounds precaching
 	PrecacheSound("replay/replaydialog_warn.wav");
@@ -335,11 +336,6 @@ Action Timer_DisplayIntro(Handle timer, int client)
 /* Round initialisation
 ==================================================================================================== */
 
-public void TF2_OnWaitingForPlayersStart()
-{
-	waitingForPlayers = true;
-}
-
 public void TF2_OnWaitingForPlayersEnd()
 {
 	waitingForPlayers = false;
@@ -481,33 +477,37 @@ public Action CountdownSetup(Handle timer)
 	if (roundTimer < 0)
 	{
 		roundTimerHandle = null;
-		Event event = CreateEvent("teamplay_setup_finished");
-		event.Fire();
-
-		if (autoHandleDoors)
+		
+		if (!waitingForPlayers)
 		{
-			int ent = -1;
-			while ((ent = FindEntityByClassname(ent, "func_door")) != -1)
+			Event event = CreateEvent("teamplay_setup_finished");
+			event.Fire();
+
+			if (autoHandleDoors)
 			{
-				AcceptEntityInput(ent, "Unlock");
-				AcceptEntityInput(ent, "Open");
-				AcceptEntityInput(ent, "Lock");
-			}
-			ent = -1;
-			while ((ent = FindEntityByClassname(ent, "prop_dynamic")) != -1)
-			{
-				char tName[64];
-				GetEntPropString(ent, Prop_Data, "m_iName", tName, sizeof(tName));
-				if (StrContains(tName, "door", false) != -1 || StrContains(tName, "gate", false) != -1)
+				int ent = -1;
+				while ((ent = FindEntityByClassname(ent, "func_door")) != -1)
 				{
-					SetVariantString("open");
-					AcceptEntityInput(ent, "SetAnimation");
+					AcceptEntityInput(ent, "Unlock");
+					AcceptEntityInput(ent, "Open");
+					AcceptEntityInput(ent, "Lock");
 				}
-			}
-			ent = -1;
-			while ((ent = FindEntityByClassname(ent, "trigger_multiple")) != -1)
-			{
-				AcceptEntityInput(ent, "Disable");
+				ent = -1;
+				while ((ent = FindEntityByClassname(ent, "prop_dynamic")) != -1)
+				{
+					char tName[64];
+					GetEntPropString(ent, Prop_Data, "m_iName", tName, sizeof(tName));
+					if (StrContains(tName, "door", false) != -1 || StrContains(tName, "gate", false) != -1)
+					{
+						SetVariantString("open");
+						AcceptEntityInput(ent, "SetAnimation");
+					}
+				}
+				ent = -1;
+				while ((ent = FindEntityByClassname(ent, "trigger_multiple")) != -1)
+				{
+					AcceptEntityInput(ent, "Disable");
+				}
 			}
 		}
 
@@ -531,14 +531,18 @@ public Action CountdownRound(Handle timer)
 	if (roundTimer < 0)
 	{
 		roundTimerHandle = null;
-		switch (roundType)
+		
+		if (!waitingForPlayers)
 		{
-			case Game_Attack:
-				ForceWin(TEAM_ZOMBIES);
-			case Game_Defend:
-				ForceWin(TEAM_SURVIVORS);
-			case Game_Survival:
-				ForceWin(TEAM_SURVIVORS);
+			switch (roundType)
+			{
+				case Game_Attack:
+					ForceWin(TEAM_ZOMBIES);
+				case Game_Defend:
+					ForceWin(TEAM_SURVIVORS);
+				case Game_Survival:
+					ForceWin(TEAM_SURVIVORS);
+			}
 		}
 		return Plugin_Stop;
 	}
@@ -731,8 +735,10 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 		{
 			if (!CheckCommandAccess(client, "", ADMFLAG_KICK, true))
 			{
-				ChangeClientTeam(client, TEAM_ZOMBIES);
-				ShowVGUIPanel(client, vgui);
+				if (GetClientTeam(client) != TEAM_SURVIVORS && GetClientTeam(client) != TEAM_ZOMBIES)
+					ChangeClientTeam(client, TEAM_ZOMBIES);
+					ShowVGUIPanel(client, vgui);
+				}
 				CPrintToChat(client, "%s {haunted}You do not have permission to spectate.", MESSAGE_PREFIX);
 				EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 				return Plugin_Handled;
@@ -761,16 +767,26 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 			ShowVGUIPanel(client, vgui);
 			return Plugin_Handled;
 		}
-		// Let anyone join zombie team
+		// Let anyone join zombie team, unless they are on survivor team
 		else if (StrEqual(sArg, zombTeam, false))
-			return Plugin_Continue;
-		// If client tries to join spectator, place them on zombie team with zombie class select unless they have permission
+			if (GetClientTeam(client) != TEAM_SURVIVORS)
+				return Plugin_Continue;
+			else
+			{
+				CPrintToChat(client, "%s {haunted}You are currently a {normal}Survivor {haunted}and cannot switch teams.", MESSAGE_PREFIX);
+				EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
+				return Plugin_Handled;
+			}
+		// If client tries to join spectator, place them on zombie team with zombie class select unless they have permission, unless they are on survivor team
 		else if (StrEqual(sArg, "spectate", false))
 		{
 			if (!CheckCommandAccess(client, "", ADMFLAG_KICK, true))
 			{
-				ChangeClientTeam(client, TEAM_ZOMBIES);
-				ShowVGUIPanel(client, vgui);
+				if (GetClientTeam(client) != TEAM_SURVIVORS)
+				{
+					ChangeClientTeam(client, TEAM_ZOMBIES);
+					ShowVGUIPanel(client, vgui);
+				}
 				CPrintToChat(client, "%s {haunted}You do not have permission to spectate.", MESSAGE_PREFIX);
 				EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 				return Plugin_Handled;
