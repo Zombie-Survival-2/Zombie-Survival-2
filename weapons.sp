@@ -51,7 +51,7 @@ stock void Weapons_Initialise()
 			if(weapon.replaceIndex != -1)
 				iIndex = weapon.replaceIndex;
 
-			int flags = OVERRIDE_ATTRIBUTES | OVERRIDE_CLASSNAME | OVERRIDE_ITEM_DEF | PRESERVE_ATTRIBUTES;
+			int flags = OVERRIDE_ATTRIBUTES | OVERRIDE_CLASSNAME | OVERRIDE_ITEM_DEF;
 			weapon.hWeapon = TF2Items_CreateItem(flags);
 			char sClassname[256];
 			TF2Econ_GetItemClassName(iIndex, sClassname, sizeof(sClassname));
@@ -61,6 +61,9 @@ stock void Weapons_Initialise()
 			int i2 = 0;
 			if(weapon.sAttrib[0] != '\0')
 			{
+				if(weapon.defIndex != 998)
+					flags |= PRESERVE_ATTRIBUTES;
+
 				char sAttribs[32][32];
 				int iCount = ExplodeString(weapon.sAttrib, " ; ", sAttribs, sizeof(sAttribs), sizeof(sAttribs));
 				if (iCount > 1)
@@ -78,7 +81,6 @@ stock void Weapons_Initialise()
 			if(iIndex == weapon.replaceIndex)
 			{
 				DebugText("%i num attribs before we started", i2);
-				flags = flags & ~PRESERVE_ATTRIBUTES;
 				int attribId[16];
 				float attribVal[16];
 				int iCount = TF2Attrib_GetStaticAttribs(iIndex, attribId, attribVal);
