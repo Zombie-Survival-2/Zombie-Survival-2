@@ -11,7 +11,7 @@ enum struct WeaponConfig
 
 stock void Weapons_Initialise()
 {
-	char sPath[128], section[16];
+	char sPath[128], section[512];
 	BuildPath(Path_SM, sPath, sizeof(sPath), "configs/zs2_weapons.cfg");
 	if (!FileExists(sPath))
 	{
@@ -27,16 +27,23 @@ stock void Weapons_Initialise()
 	do 
 	{
 		kv.GetSectionName(section, sizeof(section));
-		int iIndex = -1;
 
-		if (StringToIntEx(section, iIndex) == 0)
+		char strings[32][16];
+		int count;
+		if (StringToIntEx(section, count) != strlen(section))		// string is not a number
 		{
-			LogError("Invalid index \"%s\" at Weapons config section", section);
+			count = ExplodeString(section, " ; ", strings, sizeof(strings), sizeof(strings[]));
 		}
-		else
+		else 
+		{
+			count = 1;
+			strcopy(strings[0], sizeof(strings[]), section);
+		}
+
+		for(int i = 0; i < count; i++)
 		{
 			WeaponConfig weapon;
-			weapon.defIndex = iIndex;
+			weapon.defIndex = StringToInt(strings[i]);
 			weapon.replaceIndex = kv.GetNum("replace", -1);
 			kv.GetString("attributes", weapon.sAttrib, sizeof(weapon.sAttrib), "");
 			g_aWeapons.PushArray(weapon);
@@ -57,41 +64,6 @@ stock void WeaponCheck(int client)
 	{		
 		OnlyMelee(client);
 		RemoveWearable(client);
-	}
-	
-	for (int iSlot = 0; iSlot < 6; iSlot++)
-	{
-		int iEntity = GetPlayerWeaponSlot(client, iSlot);
-		if (iEntity > MaxClients)
-		{
-			int iIndex = GetEntProp(iEntity, Prop_Send, "m_iItemDefinitionIndex");
-			
-			for (int i = 0; i < g_aWeapons.Length; i++)
-			{
-				WeaponConfig wep;
-				g_aWeapons.GetArray(i, wep, sizeof(wep));
-				
-				if (wep.defIndex == iIndex)
-				{
-					if (wep.replaceIndex > -1)
-					{
-						TF2_RemoveWeaponSlot(client, iSlot);
-						iEntity = TF2Items_GiveWeapon2(client, wep.replaceIndex);
-					}
-
-					char sAttribs[32][32];
-					int iCount = ExplodeString(wep.sAttrib, " ; ", sAttribs, sizeof(sAttribs), sizeof(sAttribs));
-					if (iCount > 1)
-						for (int j = 0; j < iCount; j+= 2)
-							TF2Attrib_SetByDefIndex(iEntity, StringToInt(sAttribs[j]), StringToFloat(sAttribs[j+1]));
-					
-					break;
-				}
-			}
-			
-			//This will refresh health max calculation and other attributes
-			TF2Attrib_ClearCache(iEntity);
-		}
 	}
 
 	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 2));
@@ -127,7 +99,42 @@ public Action TF2Items_OnGiveNamedItem(int client, char[] classname, int iItemDe
 	return Plugin_Continue;
 }
 
-stock int TF2Items_GiveWeapon2(const int client, const int iItemDefinitionIndex)
+public int TF2Items_OnGiveNamedItem_Post(int client, char[] classname, int itemDefinitionIndex, int itemLevel, int itemQuality, int entity)
+{
+	for (int i = 0; i < g_aWeapons.Length; i++)
+	{
+		WeaponConfig wep;
+		g_aWeapons.GetArray(i, wep, sizeof(wep));
+
+		if (wep.defIndex == itemDefinitionIndex)
+		{
+			if(TF2Econ_GetItemDefaultLoadoutSlot(itemDefinitionIndex) < 2 && GetClientTeam(client) == TEAM_ZOMBIES)
+				continue;
+
+			if (wep.replaceIndex > -1)
+			{
+				DataPack pack;
+				CreateDataTimer(0.1, GiveDelayedWeapon, pack);
+				pack.WriteCell(client);
+				pack.WriteCell(wep.replaceIndex);
+				pack.WriteString(wep.sAttrib);
+			}
+			else 
+			{
+				DebugText("else %i in here", itemDefinitionIndex);
+				char sAttribs[32][32];
+				int iCount = ExplodeString(wep.sAttrib, " ; ", sAttribs, sizeof(sAttribs), sizeof(sAttribs));
+				if (iCount > 1)
+					for (int j = 0; j < iCount; j+= 2)
+						TF2Attrib_SetByDefIndex(entity, StringToInt(sAttribs[j]), StringToFloat(sAttribs[j+1]));
+			}
+					
+			break;
+		}
+	}
+}
+
+stock int TF2Items_GiveWeapon2(const int client, const int iItemDefinitionIndex, const char[] atts)
 {
 	TFClassType iClass = TF2_GetPlayerClass(client);
 	char sClassname[256];
@@ -158,10 +165,30 @@ stock int TF2Items_GiveWeapon2(const int client, const int iItemDefinitionIndex)
 	
 	if (IsValidEntity(iWeapon))
 	{
+		if (!StrEqual(atts, ""))
+		{
+			char sAttribs2[32][32];
+			int iCount = ExplodeString(atts, " ; ", sAttribs2, 32, 32);
+			if (iCount > 1)
+				for (int i = 0; i < iCount; i+= 2)
+					TF2Attrib_SetByDefIndex(iWeapon, StringToInt(sAttribs2[i]), StringToFloat(sAttribs2[i+1]));
+		}
+
+		TF2_RemoveWeaponSlot(client, TF2Econ_GetItemDefaultLoadoutSlot(iItemDefinitionIndex));
 		DispatchSpawn(iWeapon);
 		SetEntProp(iWeapon, Prop_Send, "m_bValidatedAttachedEntity", true); // Make weapon visible
 		EquipPlayerWeapon(client, iWeapon);
 	}
 	
 	return iWeapon;
+}
+
+public Action GiveDelayedWeapon(Handle timer, DataPack pack)
+{
+	char attributes[256];
+	pack.Reset();
+	int client = pack.ReadCell();
+	int index = pack.ReadCell();
+	pack.ReadString(attributes, sizeof(attributes));
+	TF2Items_GiveWeapon2(client, index, attributes);
 }
