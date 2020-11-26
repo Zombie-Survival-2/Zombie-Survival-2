@@ -45,7 +45,6 @@ enum
 };
 bool setupTime,
 	roundStarted,
-	regenAgain[MAXPLAYERS+1],
 	waitingForPlayers,
 	selectedAsSurvivor[MAXPLAYERS+1];
 int roundTimer,
@@ -165,6 +164,7 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_zs_class", Command_Class);
 	RegConsoleCmd("sm_zs2class", Command_Class);
 	RegConsoleCmd("sm_zs2_class", Command_Class);
+	RegAdminCmd("sm_zs_reloadconfig", AdminCommand_ReloadConfig, ADMFLAG_CONFIG);
 	RegAdminCmd("sm_zsmaxpoints", AdminCommand_MaxPoints, ADMFLAG_ROOT);
 	RegAdminCmd("sm_zs_maxpoints", AdminCommand_MaxPoints, ADMFLAG_ROOT);
 	RegAdminCmd("sm_zs2maxpoints", AdminCommand_MaxPoints, ADMFLAG_ROOT);
@@ -915,14 +915,6 @@ Action Event_OnRegen(Event event, const char[] name, bool dontBroadcast)
 		return;
 	}
 
-	if(!regenAgain[player])
-	{
-		regenAgain[player] = true;
-		TF2_RegeneratePlayer(player);
-		return;
-	}
-
-	regenAgain[player] = false;
 	WeaponCheck(player);
 }
 
@@ -1199,6 +1191,12 @@ public Action AdminCommand_MaxPoints(int client, int args)
 {
 	if (smDebug.BoolValue)
 		queuePoints[client] = 999;
+	return Plugin_Handled;
+}
+
+public Action AdminCommand_ReloadConfig(int client, int args)
+{
+	Weapons_Initialise();
 	return Plugin_Handled;
 }
 
