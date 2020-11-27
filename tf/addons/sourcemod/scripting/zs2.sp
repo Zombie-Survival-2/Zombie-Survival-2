@@ -165,6 +165,7 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_zs_class", Command_Class);
 	RegConsoleCmd("sm_zs2class", Command_Class);
 	RegConsoleCmd("sm_zs2_class", Command_Class);
+	RegAdminCmd("sm_zs_reloadconfig", AdminCommand_ReloadConfig, ADMFLAG_CONFIG);
 	RegAdminCmd("sm_zsmaxpoints", AdminCommand_MaxPoints, ADMFLAG_ROOT);
 	RegAdminCmd("sm_zs_maxpoints", AdminCommand_MaxPoints, ADMFLAG_ROOT);
 	RegAdminCmd("sm_zs2maxpoints", AdminCommand_MaxPoints, ADMFLAG_ROOT);
@@ -692,17 +693,26 @@ Action Event_Audio(Event event, const char[] name, bool dontBroadcast)
 
 Action Listener_JoinTeam(int client, const char[] command, int args)
 {
+	char sArg[32], survTeam[16], zombTeam[16], vgui[16];
+	
 	// Do not permit empty jointeam command
 	if (!args && StrEqual(command, "jointeam", false))
 		return Plugin_Handled;
+	
+	// Do not proceed with restrictions if waiting for players
+	if (waitingForPlayers)
+		return Plugin_Continue;
+	
 	// Allow all commands for invalid clients
 	if (!IsValidClient(client))
 		return Plugin_Continue;
 
-	char sArg[32],
-		survTeam[16],
-		zombTeam[16],
-		vgui[16];
+	if (setupTime)
+	{
+		CPrintToChat(client, "%s {haunted}No team switch during setup time.", MESSAGE_PREFIX);
+		return Plugin_Handled;
+	}
+	
 	// Get command/arg on which team player joined
 	if (StrEqual(command, "jointeam", false)) // "jointeam spectate" takes priority
 		GetCmdArg(1, sArg, sizeof(sArg));
@@ -725,78 +735,34 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 		vgui = "class_red";
 	}
 	
-	if (waitingForPlayers)
+	if (roundStarted)
 	{
-		// Let anyone join any team
-		if (StrEqual(sArg, survTeam, false) || StrEqual(sArg, zombTeam, false) || StrEqual(sArg, "auto", false))
-			return Plugin_Continue;
-		// If client tries to join spectator, place them on zombie team with zombie class select unless they have permission
-		else if (StrEqual(sArg, "spectate", false))
-		{
-			if (!CheckCommandAccess(client, "", ADMFLAG_KICK, true))
-			{
-				if (GetClientTeam(client) != TEAM_SURVIVORS && GetClientTeam(client) != TEAM_ZOMBIES)
-					ChangeClientTeam(client, TEAM_ZOMBIES);
-					ShowVGUIPanel(client, vgui);
-				}
-				CPrintToChat(client, "%s {haunted}You do not have permission to spectate.", MESSAGE_PREFIX);
-				EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
-				return Plugin_Handled;
-			}
-			
-			return Plugin_Continue;
-		}
-		else
-			return Plugin_Handled;
-	}
-	else
-	{
-		// If client tries to join survivor team, place them on zombie team with zombie class select
-		if (StrEqual(sArg, survTeam, false))
+		// If client tries to join survivor team or random team, place them on zombie team with zombie class select
+		if (StrEqual(sArg, survTeam, false) || StrEqual(sArg, "auto", false))
 		{
 			ChangeClientTeam(client, TEAM_ZOMBIES);
 			ShowVGUIPanel(client, vgui);
-			CPrintToChat(client, "%s {haunted}You cannot switch to the survivor team during a round.", MESSAGE_PREFIX);
-			EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
+			CPrintToChat(client, "%s {haunted}You cannot be survivor, forced to join zombie team.", MESSAGE_PREFIX);
 			return Plugin_Handled;
 		}
-		// Same procedure for autoteam but without warnings
-		else if (StrEqual(sArg, "auto", false))
-		{
-			ChangeClientTeam(client, TEAM_ZOMBIES);
-			ShowVGUIPanel(client, vgui);
-			return Plugin_Handled;
-		}
-		// Let anyone join zombie team, unless they are on survivor team
+		// Let anyone join zombie team
 		else if (StrEqual(sArg, zombTeam, false))
-			if (GetClientTeam(client) != TEAM_SURVIVORS)
-				return Plugin_Continue;
-			else
-			{
-				CPrintToChat(client, "%s {haunted}You are currently a {normal}Survivor {haunted}and cannot switch teams.", MESSAGE_PREFIX);
-				EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
-				return Plugin_Handled;
-			}
-		// If client tries to join spectator, place them on zombie team with zombie class select unless they have permission, unless they are on survivor team
+		{
+			return Plugin_Continue;
+		}
+		// If client tries to join spectator, check their privileges
 		else if (StrEqual(sArg, "spectate", false))
 		{
 			if (!CheckCommandAccess(client, "", ADMFLAG_KICK, true))
-			{
-				if (GetClientTeam(client) != TEAM_SURVIVORS)
-				{
-					ChangeClientTeam(client, TEAM_ZOMBIES);
-					ShowVGUIPanel(client, vgui);
-				}
-				CPrintToChat(client, "%s {haunted}You do not have permission to spectate.", MESSAGE_PREFIX);
-				EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 				return Plugin_Handled;
-			}
 			
 			return Plugin_Continue;
 		}
 		else
 			return Plugin_Handled;
 	}
+	
+	return Plugin_Continue;
 }
 
 Action Listener_JoinClass(int client, const char[] command, int args)
@@ -956,7 +922,7 @@ Action Event_OnRegen(Event event, const char[] name, bool dontBroadcast)
 		return;
 	}
 
-	if(!regenAgain[player])
+	if (!regenAgain[player])
 	{
 		regenAgain[player] = true;
 		TF2_RegeneratePlayer(player);
@@ -1238,6 +1204,12 @@ public Action AdminCommand_MaxPoints(int client, int args)
 {
 	if (smDebug.BoolValue)
 		queuePoints[client] = 999;
+	return Plugin_Handled;
+}
+
+public Action AdminCommand_ReloadConfig(int client, int args)
+{
+	Weapons_Initialise();
 	return Plugin_Handled;
 }
 

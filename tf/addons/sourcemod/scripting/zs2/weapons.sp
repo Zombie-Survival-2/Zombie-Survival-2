@@ -1,17 +1,16 @@
 // CFG-controlled variables
-
 ArrayList g_aWeapons;
-
 enum struct WeaponConfig
 {
 	int defIndex;
 	int replaceIndex;
 	char sAttrib[256];
+	Handle hWeapon;
 }
 
 stock void Weapons_Initialise()
 {
-	char sPath[128], section[16];
+	char sPath[128], section[512];
 	BuildPath(Path_SM, sPath, sizeof(sPath), "configs/zs2_weapons.cfg");
 	if (!FileExists(sPath))
 	{
@@ -27,18 +26,75 @@ stock void Weapons_Initialise()
 	do 
 	{
 		kv.GetSectionName(section, sizeof(section));
-		int iIndex = -1;
 
-		if (StringToIntEx(section, iIndex) == 0)
+		char strings[32][16];
+		int count;
+		if (StringToIntEx(section, count) != strlen(section))		// string is not a number
 		{
-			LogError("Invalid index \"%s\" at Weapons config section", section);
+			count = ExplodeString(section, " ; ", strings, sizeof(strings), sizeof(strings[]));
 		}
 		else
 		{
+			count = 1;
+			strcopy(strings[0], sizeof(strings[]), section);
+		}
+
+		for (int i = 0; i < count; i++)
+		{
+			int iIndex = StringToInt(strings[i]);
 			WeaponConfig weapon;
 			weapon.defIndex = iIndex;
 			weapon.replaceIndex = kv.GetNum("replace", -1);
 			kv.GetString("attributes", weapon.sAttrib, sizeof(weapon.sAttrib), "");
+			if (weapon.replaceIndex != -1)
+				iIndex = weapon.replaceIndex;
+
+			int flags = OVERRIDE_ATTRIBUTES | OVERRIDE_CLASSNAME | OVERRIDE_ITEM_DEF;
+			weapon.hWeapon = TF2Items_CreateItem(flags);
+			char sClassname[256];
+			TF2Econ_GetItemClassName(iIndex, sClassname, sizeof(sClassname));
+			TF2Items_SetClassname(weapon.hWeapon, sClassname);
+			TF2Items_SetItemIndex(weapon.hWeapon, iIndex);
+
+			int i2 = 0;
+			if (weapon.sAttrib[0] != '\0')
+			{
+				if (weapon.defIndex != 998)
+					flags |= PRESERVE_ATTRIBUTES;
+
+				char sAttribs[32][32];
+				int iCount = ExplodeString(weapon.sAttrib, " ; ", sAttribs, sizeof(sAttribs), sizeof(sAttribs));
+				if (iCount > 1)
+				{
+					TF2Items_SetNumAttributes(weapon.hWeapon, iCount / 2);
+
+					for (int j = 0; j < iCount; j+= 2)
+					{
+						TF2Items_SetAttribute(weapon.hWeapon, i2, StringToInt(sAttribs[j]), StringToFloat(sAttribs[j+1]));
+						i2++;
+					}
+				}
+			}
+
+			if (iIndex == weapon.replaceIndex)
+			{
+				DebugText("%i num attribs before we started", i2);
+				int attribId[16];
+				float attribVal[16];
+				int iCount = TF2Attrib_GetStaticAttribs(iIndex, attribId, attribVal);
+				iCount /= 2;
+
+				for (int j = 0; j < iCount; j++)
+				{
+					TF2Items_SetAttribute(weapon.hWeapon, i2, attribId[j], attribVal[j]);
+					i2++;
+				}
+
+				DebugText("%i num attribs after", i2);
+				TF2Items_SetNumAttributes(weapon.hWeapon, i2);	
+			}
+
+			TF2Items_SetFlags(weapon.hWeapon, flags);
 			g_aWeapons.PushArray(weapon);
 		}
 	}
@@ -58,40 +114,6 @@ stock void WeaponCheck(int client)
 	{		
 		OnlyMelee(client);
 		RemoveWearable(client);
-	}
-	
-	for (int iSlot = 0; iSlot < 6; iSlot++)
-	{
-		int iEntity = GetPlayerWeaponSlot(client, iSlot);
-		if (iEntity > MaxClients)
-		{
-			int iIndex = GetEntProp(iEntity, Prop_Send, "m_iItemDefinitionIndex");
-			
-			for (int i = 0; i < g_aWeapons.Length; i++)
-			{
-				WeaponConfig wep;
-				g_aWeapons.GetArray(i, wep, sizeof(wep));
-				
-				if (wep.defIndex == iIndex)
-				{
-					if (wep.replaceIndex > -1)
-					{
-						TF2_RemoveWeaponSlot(client, iSlot);
-						iEntity = TF2Items_GiveWeapon2(client, wep.replaceIndex);
-					}
-
-					char sAttribs[32][32];
-					int iCount = ExplodeString(wep.sAttrib, " ; ", sAttribs, sizeof(sAttribs), sizeof(sAttribs));
-					if (iCount > 1)
-						for (int j = 0; j < iCount; j+= 2)
-							TF2Attrib_SetByDefIndex(iEntity, StringToInt(sAttribs[j]), StringToFloat(sAttribs[j+1]));
-					
-					break;
-				}
-			}
-			
-			TF2Attrib_ClearCache(iEntity); // This will refresh health max calculation and other attributes
-		}
 	}
 
 	if (team == TEAM_SURVIVORS)
@@ -127,44 +149,17 @@ public Action TF2Items_OnGiveNamedItem(int client, char[] classname, int iItemDe
 		}
 	}
 
-	return Plugin_Continue;
-}
+	for (int i = 0; i < g_aWeapons.Length; i++)
+	{
+		WeaponConfig wep;
+		g_aWeapons.GetArray(i, wep, sizeof(wep));
 
-stock int TF2Items_GiveWeapon2(const int client, const int iItemDefinitionIndex)
-{
-	TFClassType iClass = TF2_GetPlayerClass(client);
-	char sClassname[256];
-	TF2Econ_GetItemClassName(iItemDefinitionIndex, sClassname, sizeof(sClassname));
-	TF2Econ_TranslateWeaponEntForClass(sClassname, sizeof(sClassname), iClass);
-	
-	/*int iSubType;
-	if ((StrEqual(sClassname, "tf_weapon_builder") || StrEqual(sClassname, "tf_weapon_sapper")) && iClass == TFClass_Spy)
-	{
-		iSubType = view_as<int>(TFObject_Sapper);
-		sClassname = "tf_weapon_builder";
-	}*/
-	
-	int iWeapon = CreateEntityByName(sClassname);
-	if (IsValidEntity(iWeapon))
-	{
-		SetEntProp(iWeapon, Prop_Send, "m_iItemDefinitionIndex", iItemDefinitionIndex);
-		SetEntProp(iWeapon, Prop_Send, "m_bInitialized", true);
-		SetEntProp(iWeapon, Prop_Send, "m_iEntityQuality", 0);
-		SetEntProp(iWeapon, Prop_Send, "m_iEntityLevel", 1);
-			
-		/*if (iSubType)
+		if (wep.defIndex == iItemDefinitionIndex)
 		{
-			SetEntProp(iWeapon, Prop_Send, "m_iObjectType", iSubType);
-			SetEntProp(iWeapon, Prop_Data, "m_iSubType", iSubType);
-		}*/
+			hItem = wep.hWeapon;
+			return Plugin_Changed;
+		}
 	}
-	
-	if (IsValidEntity(iWeapon))
-	{
-		DispatchSpawn(iWeapon);
-		SetEntProp(iWeapon, Prop_Send, "m_bValidatedAttachedEntity", true); // Make weapon visible
-		EquipPlayerWeapon(client, iWeapon);
-	}
-	
-	return iWeapon;
+
+	return Plugin_Continue;
 }
