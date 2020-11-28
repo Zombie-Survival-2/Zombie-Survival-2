@@ -11,6 +11,11 @@ enum struct WeaponConfig
 
 stock void Weapons_Initialise()
 {
+	g_aWeapons = new ArrayList(sizeof(WeaponConfig));
+}
+
+stock void Weapons_Refresh()
+{
 	char sPath[128], section[512];
 	BuildPath(Path_SM, sPath, sizeof(sPath), "configs/zs2_weapons.cfg");
 	if (!FileExists(sPath))
@@ -19,9 +24,9 @@ stock void Weapons_Initialise()
 		return;
 	}
 
-	g_aWeapons = new ArrayList(sizeof(WeaponConfig));
-	KeyValues kv = new KeyValues("TF2_ZS2_WEAPONS");
+	g_aWeapons.Clear();
 
+	KeyValues kv = new KeyValues("TF2_ZS2_WEAPONS");
 	kv.ImportFromFile(sPath);
 	kv.GotoFirstSubKey();
 	do 
@@ -95,100 +100,75 @@ public Action TF2Items_OnGiveNamedItem(int client, char[] classname, int iItemDe
 			return Plugin_Handled;
 		}
 	}
-
-	return Plugin_Continue;
-}
-
-public int TF2Items_OnGiveNamedItem_Post(int client, char[] classname, int itemDefinitionIndex, int itemLevel, int itemQuality, int entity)
-{
+	
 	for (int i = 0; i < g_aWeapons.Length; i++)
 	{
 		WeaponConfig wep;
 		g_aWeapons.GetArray(i, wep, sizeof(wep));
 
-		if (wep.defIndex == itemDefinitionIndex)
+		if (wep.defIndex == iItemDefinitionIndex)
 		{
-			if(TF2Econ_GetItemDefaultLoadoutSlot(itemDefinitionIndex) < 2 && GetClientTeam(client) == TEAM_ZOMBIES)
-				continue;
+			Handle hItemOverride = PrepareItemHandle(iItemDefinitionIndex, wep.replaceIndex, wep.sAttrib);
 
-			if (wep.replaceIndex > -1)
+			if (hItemOverride != null) // if it's null then :(
 			{
-				DataPack pack;
-				CreateDataTimer(0.1, GiveDelayedWeapon, pack);
-				pack.WriteCell(client);
-				pack.WriteCell(wep.replaceIndex);
-				pack.WriteString(wep.sAttrib);
+				hItem = hItemOverride;
+				return Plugin_Changed;
 			}
-			else 
-			{
-				DebugText("else %i in here", itemDefinitionIndex);
-				char sAttribs[32][32];
-				int iCount = ExplodeString(wep.sAttrib, " ; ", sAttribs, sizeof(sAttribs), sizeof(sAttribs));
-				if (iCount > 1)
-					for (int j = 0; j < iCount; j+= 2)
-						TF2Attrib_SetByDefIndex(entity, StringToInt(sAttribs[j]), StringToFloat(sAttribs[j+1]));
-			}
-					
-			break;
 		}
 	}
+	
+	return Plugin_Continue;
 }
 
-stock int TF2Items_GiveWeapon2(const int client, const int iItemDefinitionIndex, const char[] atts)
+stock Handle PrepareItemHandle(int defIndex, int replaceIndex, const char[] sAttrib)
 {
-	TFClassType iClass = TF2_GetPlayerClass(client);
-	char sClassname[256];
-	TF2Econ_GetItemClassName(iItemDefinitionIndex, sClassname, sizeof(sClassname));
-	TF2Econ_TranslateWeaponEntForClass(sClassname, sizeof(sClassname), iClass);
-	
-	/*int iSubType;
-	if ((StrEqual(sClassname, "tf_weapon_builder") || StrEqual(sClassname, "tf_weapon_sapper")) && iClass == TFClass_Spy)
+	static Handle hWeapon = null;
+	int flags = OVERRIDE_ATTRIBUTES, count = 0;
+	int attribId[16];
+	float attribVal[16];
+	char weaponAttribsArray[32][32];
+	int attribCount = ExplodeString(sAttrib, " ; ", weaponAttribsArray, 32, 32);
+
+	if (hWeapon == null)
+		hWeapon = TF2Items_CreateItem(flags);
+	else 
+		TF2Items_SetFlags(hWeapon, flags);
+
+	if (replaceIndex != -1)
 	{
-		iSubType = view_as<int>(TFObject_Sapper);
-		sClassname = "tf_weapon_builder";
-	}*/
-	
-	int iWeapon = CreateEntityByName(sClassname);
-	if (IsValidEntity(iWeapon))
-	{
-		SetEntProp(iWeapon, Prop_Send, "m_iItemDefinitionIndex", iItemDefinitionIndex);
-		SetEntProp(iWeapon, Prop_Send, "m_bInitialized", true);
-		SetEntProp(iWeapon, Prop_Send, "m_iEntityQuality", 0);
-		SetEntProp(iWeapon, Prop_Send, "m_iEntityLevel", 1);
-			
-		/*if (iSubType)
-		{
-			SetEntProp(iWeapon, Prop_Send, "m_iObjectType", iSubType);
-			SetEntProp(iWeapon, Prop_Data, "m_iSubType", iSubType);
-		}*/
+		flags |= OVERRIDE_ITEM_DEF;
+		TF2Items_SetItemIndex(hWeapon, replaceIndex);
+
+		flags |= OVERRIDE_CLASSNAME;
+		char classname[128];
+		TF2Econ_GetItemClassName(replaceIndex, classname, sizeof(classname));
+		TF2Items_SetClassname(hWeapon, classname);
+
+		count = TF2Attrib_GetStaticAttribs(replaceIndex, attribId, attribVal);
+		count /= 2;
 	}
-	
-	if (IsValidEntity(iWeapon))
+	else if(defIndex != 998) // we are not preserving attributes for vaccinator
 	{
-		if (!StrEqual(atts, ""))
+		flags |= PRESERVE_ATTRIBUTES;
+	}
+
+	if(attribCount > 1)
+	{
+		for (int i = count, i2 = 0; i < 16 && i2 < attribCount; i++, i2+=2)
 		{
-			char sAttribs2[32][32];
-			int iCount = ExplodeString(atts, " ; ", sAttribs2, 32, 32);
-			if (iCount > 1)
-				for (int i = 0; i < iCount; i+= 2)
-					TF2Attrib_SetByDefIndex(iWeapon, StringToInt(sAttribs2[i]), StringToFloat(sAttribs2[i+1]));
+			attribId[i] = StringToInt(weaponAttribsArray[i2]);
+			attribVal[i] = StringToFloat(weaponAttribsArray[i2 + 1]);
+			count++;
 		}
-
-		TF2_RemoveWeaponSlot(client, TF2Econ_GetItemDefaultLoadoutSlot(iItemDefinitionIndex));
-		DispatchSpawn(iWeapon);
-		SetEntProp(iWeapon, Prop_Send, "m_bValidatedAttachedEntity", true); // Make weapon visible
-		EquipPlayerWeapon(client, iWeapon);
 	}
-	
-	return iWeapon;
-}
 
-public Action GiveDelayedWeapon(Handle timer, DataPack pack)
-{
-	char attributes[256];
-	pack.Reset();
-	int client = pack.ReadCell();
-	int index = pack.ReadCell();
-	pack.ReadString(attributes, sizeof(attributes));
-	TF2Items_GiveWeapon2(client, index, attributes);
+	TF2Items_SetNumAttributes(hWeapon, count);
+	for (int i = 0; i < count; i++)
+	{
+		TF2Items_SetAttribute(hWeapon, i, attribId[i], attribVal[i]);
+	}
+
+	TF2Items_SetFlags(hWeapon, flags);
+	return hWeapon;
 }
