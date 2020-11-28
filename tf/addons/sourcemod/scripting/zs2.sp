@@ -23,7 +23,7 @@
 // Defines
 #define MESSAGE_PREFIX "{collectors}[ZS2]"
 #define MESSAGE_PREFIX_NO_COLOR "[ZS2]"
-#define PLUGIN_VERSION "0.1.1"
+#define PLUGIN_VERSION "0.1.2 Beta"
 #define MOTD_VERSION "0.1"
 #define IsValidClient(%1) (1 <= %1 <= MaxClients && IsClientInGame(%1))
 
@@ -36,35 +36,14 @@ public Plugin myinfo = {
 	url = "https://github.com/Zombie-Survival-2"
 };
 
-// Standard variables
 enum
 {
-	TEAM_SPEC = 1,
-	TEAM_RED = 2,
-	TEAM_BLUE = 3
+	TEAM_UNASSIGNED,
+	TEAM_SPEC,
+	TEAM_RED,
+	TEAM_BLUE
 };
-bool setupTime,
-	roundStarted,
-	waitingForPlayers,
-	selectedAsSurvivor[MAXPLAYERS+1];
-int roundTimer,
-	TEAM_SURVIVORS,
-	TEAM_ZOMBIES,
-	queuePoints[MAXPLAYERS+1],
-	damageDealt[MAXPLAYERS+1],
-	g_LastButtons[MAXPLAYERS+1],
-	jumpCount[MAXPLAYERS+1];
-public const char objectiveEntities[6][32] = {
-	"team_control_point_master",
-	"team_control_point",
-	"trigger_capture_area",
-	"item_teamflag",
-	"func_capturezone",
-	"mapobj_cart_dispenser"
-};
-Handle roundTimerHandle;
 
-// Round type variables
 enum RoundType
 {
 	Game_Attack,
@@ -73,36 +52,46 @@ enum RoundType
 	// Game_Waves,
 	// Game_Scavenge
 };
-public const char roundTypeStrings[3][] = {
-	"Attack",
-	"Defend",
-	"Survival"
-	// "Waves",
-	// "Scavenge"
-};
+
+bool setupTime;
+bool roundStarted;
+bool waitingForPlayers;
+bool attackTeamSwap;
+bool autoHandleDoors;
+bool freezeInSetup;
+bool selectedAsSurvivor[MAXPLAYERS+1];
+
+int roundTimer;
+int	TEAM_SURVIVORS;
+int	TEAM_ZOMBIES;
+int	objectiveBonus;
+int	roundDuration;
+int	roundDurationCP;
+int	setupDuration;
+int	queuePoints[MAXPLAYERS+1];
+int	damageDealt[MAXPLAYERS+1];
+int	g_LastButtons[MAXPLAYERS+1];
+int	jumpCount[MAXPLAYERS+1];
+
+char objectiveEntities[][] = { "team_control_point_master", "team_control_point", "trigger_capture_area", "item_teamflag", "func_capturezone", "mapobj_cart_dispenser"};
+char roundTypeStrings[][] = { "Attack", "Defend", "Survival" /*"Waves", "Scavenge"*/};
+char introCP[64];
+char introST[64];	
+
+ConVar smDebug;
+ConVar smTeamRatio;
+ConVar smTeamMax;
+ConVar smPointsDamage;
+ConVar smPointsTime;
+ConVar smPointsWhilePlaying;
+ConVar smPointsOnKill;
+ConVar smPointsOnAssist;
+
+Handle roundTimerHandle;
+
 RoundType roundType;
 
-// JSON-controlled variables
-bool attackTeamSwap,
-	autoHandleDoors,
-	freezeInSetup;
-int objectiveBonus,
-	roundDuration,
-	roundDurationCP,
-	setupDuration;
-char introCP[64],
-	introST[64];
 ArrayList allowedRoundTypes;
-
-// ConVars
-ConVar smDebug,
-	smTeamRatio,
-	smTeamMax,
-	smPointsDamage,
-	smPointsTime,
-	smPointsWhilePlaying,
-	smPointsOnKill,
-	smPointsOnAssist;
 
 // Method includes
 #include "zs2/cp.sp"
@@ -179,6 +168,8 @@ public void OnPluginStart()
 
 	// Translations
 	LoadTranslations("common.phrases");
+
+	Weapons_Initialise();
 }
 
 /* Map initialisation + server tags
@@ -232,7 +223,7 @@ public void OnMapStart()
 	delete roundTimerHandle;
 	
 	// Read weapons CFG file
-	Weapons_Initialise();
+	Weapons_Refresh();
 	
 	// Read JSON file and set related variables
 	Maps_Initialise();
@@ -633,13 +624,15 @@ public int GameVote(NativeVote vote, MenuAction action, int param1, int param2)
 			allowedRoundTypes.GetString(i, strval, sizeof(strval));
 			vote.DisplayPassCustom("Round type set to %s", strval);
 			CPrintToChatAll("%s {haunted}The next round type will be {normal}%s {haunted}(%d/%d).", MESSAGE_PREFIX, strval, votes, totalVotes);
-			int j = 0;
-			for ( ; j < sizeof(roundTypeStrings); j++)
+
+			for (int j = 0; j < sizeof(roundTypeStrings); j++)
 			{
 				if (StrEqual(roundTypeStrings[j], strval))
+				{
+					roundType = view_as<RoundType>(j);
 					break;
+				}
 			}
-			roundType = view_as<RoundType>(j);
 		}
 	}
 }
@@ -690,30 +683,33 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 {
 	char sArg[32], survTeam[16], zombTeam[16], vgui[16];
 	
-	if (args < 1 && StrEqual(command, "jointeam", false))
+	// Do not permit empty jointeam command
+	if (!args && StrEqual(command, "jointeam", false))
 		return Plugin_Handled;
 	
+	// Do not proceed with restrictions if waiting for players
 	if (waitingForPlayers)
 		return Plugin_Continue;
 	
+	// Allow all commands for invalid clients
 	if (!IsValidClient(client))
 		return Plugin_Continue;
 
 	if (setupTime)
 	{
-		CPrintToChat(client, "%s No team switch during setup time.", MESSAGE_PREFIX);
+		CPrintToChat(client, "%s {haunted}No team switch during setup time.", MESSAGE_PREFIX);
 		return Plugin_Handled;
 	}
 	
-	//Get command/arg on which team player joined
-	if (StrEqual(command, "jointeam", false)) //This is done because "jointeam spectate" should take priority over "spectate"
+	// Get command/arg on which team player joined
+	if (StrEqual(command, "jointeam", false)) // "jointeam spectate" takes priority
 		GetCmdArg(1, sArg, sizeof(sArg));
 	else if (StrEqual(command, "spectate", false))
 		strcopy(sArg, sizeof(sArg), "spectate");	
 	else if (StrEqual(command, "autoteam", false))
 		strcopy(sArg, sizeof(sArg), "autoteam");		
 	
-	//Assign team-specific strings
+	// Assign team-specific strings
 	if (TEAM_ZOMBIES == TEAM_BLUE)
 	{
 		survTeam = "red";
@@ -729,31 +725,27 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 	
 	if (roundStarted)
 	{
-		//If client tries to join the survivor team or a random team
-		//during an active round, place them on the zombie
-		//team and present them with the zombie class select screen.
+		// If client tries to join survivor team or random team, place them on zombie team with zombie class select
 		if (StrEqual(sArg, survTeam, false) || StrEqual(sArg, "auto", false))
 		{
 			ChangeClientTeam(client, TEAM_ZOMBIES);
 			ShowVGUIPanel(client, vgui);
-			CPrintToChat(client, "%s You cannot be survivor, forced to join zombie team.", MESSAGE_PREFIX);
+			CPrintToChat(client, "%s {haunted}You cannot be survivor, forced to join zombie team.", MESSAGE_PREFIX);
 			return Plugin_Handled;
 		}
-		//If client tries to join the zombie team
-		//during an active round, let them do so.
+		// Let anyone join zombie team
 		else if (StrEqual(sArg, zombTeam, false))
 		{
 			return Plugin_Continue;
 		}
-		// spec
+		// If client tries to join spectator, check their privileges
 		else if (StrEqual(sArg, "spectate", false))
 		{
-			if(!CheckCommandAccess(client, "", ADMFLAG_KICK, true))
+			if (!CheckCommandAccess(client, "", ADMFLAG_KICK, true))
 				return Plugin_Handled;
 			
 			return Plugin_Continue;
 		}
-		//Prevent joining any other team.
 		else
 			return Plugin_Handled;
 	}
@@ -777,6 +769,7 @@ Action Listener_JoinClass(int client, const char[] command, int args)
 		// TODO: Need to allow survivor to switch to their own class
 		if (!IsAllowedClass(client, TF2_GetClass(chosenClass)))
 		{
+			CPrintToChat(client, "%s {haunted}You cannot be a class that someone else on the survivor team already is.", MESSAGE_PREFIX);
 			EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 			return Plugin_Handled;
 		}
@@ -1097,7 +1090,7 @@ public Action Command_Class(int client, int args)
 	}
 
 	TFClassType class;
-	if(args == 0)
+	if(!args)
 	{
 		class = TF2_GetPlayerClass(client);
 	}
@@ -1105,7 +1098,7 @@ public Action Command_Class(int client, int args)
 	{
 		char arg[32];
 		GetCmdArg(1, arg, sizeof(arg));
-		if(StrEqual(arg, "heavy"))
+		if (StrEqual(arg, "heavy"))
 			arg = "heavyweapons";
 		class = TF2_GetClass(arg);
 	}
@@ -1196,7 +1189,7 @@ public Action AdminCommand_MaxPoints(int client, int args)
 
 public Action AdminCommand_ReloadConfig(int client, int args)
 {
-	Weapons_Initialise();
+	Weapons_Refresh();
 	return Plugin_Handled;
 }
 
