@@ -74,13 +74,13 @@ stock void WeaponCheck(int client)
 	SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", GetPlayerWeaponSlot(client, 2));
 }
 
-stock void OnlyMelee(const int client)
+stock void OnlyMelee(int client)
 {
 	TF2_RemoveWeaponSlot(client, 0);
 	TF2_RemoveWeaponSlot(client, 1);
 }
 
-stock void RemoveWearable(const int client)
+stock void RemoveWearable(int client)
 {
 	int i = -1;
 	while ((i = FindEntityByClassname(i, "tf_wearable_demoshield")) != -1)
@@ -155,10 +155,23 @@ stock Handle PrepareItemHandle(int defIndex, int replaceIndex, const char[] sAtt
 
 	if(attribCount > 1)
 	{
-		for (int i = count, i2 = 0; i < 16 && i2 < attribCount; i++, i2+=2)
+		for (int i2 = 0; i2 < attribCount; i2+=2)
 		{
-			attribId[i] = StringToInt(weaponAttribsArray[i2]);
-			attribVal[i] = StringToFloat(weaponAttribsArray[i2 + 1]);
+			bool dontAdd = false;
+			for(int j = 0; j < count; j++)
+			{
+				if(attribId[j] == StringToInt(weaponAttribsArray[i2]))
+				{
+					dontAdd = true;
+					break;
+				}		
+			}
+
+			if(dontAdd)
+				continue;
+
+			attribId[count] = StringToInt(weaponAttribsArray[i2]);
+			attribVal[count] = StringToFloat(weaponAttribsArray[i2 + 1]);
 			count++;
 		}
 	}
