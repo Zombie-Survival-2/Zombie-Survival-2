@@ -1164,7 +1164,7 @@ public Action Command_Class(int client, int args)
 		{
 			Format(title, sizeof(title), "%s Medic (Survivor)", MESSAGE_PREFIX_NO_COLOR);
 			menu2.SetTitle(title);
-			menu2.DrawText("- Vaccinator replaced with Quick-Fix.");
+			menu2.DrawText("- Vaccinator behaves identically to Quick-Fix.");
 		}
 		else
 			displayMenu = false;
