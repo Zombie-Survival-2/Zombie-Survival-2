@@ -162,6 +162,7 @@ stock Handle PrepareItemHandle(int defIndex, int replaceIndex, const char[] sAtt
 			{
 				if(attribId[j] == StringToInt(weaponAttribsArray[i2]))
 				{
+					attribVal[j] = StringToFloat(weaponAttribsArray[i2+1]);
 					dontAdd = true;
 					break;
 				}		
