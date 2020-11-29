@@ -1,7 +1,5 @@
 // CFG-controlled variables
-
 ArrayList g_aWeapons;
-
 enum struct WeaponConfig
 {
 	int defIndex;
@@ -35,17 +33,16 @@ stock void Weapons_Refresh()
 
 		char strings[32][16];
 		int count;
-		if (StringToIntEx(section, count) != strlen(section))		// string is not a number
-		{
+		// If string is not a single number
+		if (StringToIntEx(section, count) != strlen(section))
 			count = ExplodeString(section, " ; ", strings, sizeof(strings), sizeof(strings[]));
-		}
 		else 
 		{
 			count = 1;
 			strcopy(strings[0], sizeof(strings[]), section);
 		}
 
-		for(int i = 0; i < count; i++)
+		for (int i = 0; i < count; i++)
 		{
 			WeaponConfig weapon;
 			weapon.defIndex = StringToInt(strings[i]);
@@ -93,12 +90,11 @@ stock void RemoveWearable(int client)
 
 public Action TF2Items_OnGiveNamedItem(int client, char[] classname, int iItemDefinitionIndex, Handle &hItem)
 {
+	// Sappers
 	switch (iItemDefinitionIndex)
 	{
-		case 735, 736, 810, 831, 933, 1080, 1102:	// Sappers
-		{
+		case 735, 736, 810, 831, 933, 1080, 1102:
 			return Plugin_Handled;
-		}
 	}
 	
 	for (int i = 0; i < g_aWeapons.Length; i++)
@@ -110,7 +106,7 @@ public Action TF2Items_OnGiveNamedItem(int client, char[] classname, int iItemDe
 		{
 			Handle hItemOverride = PrepareItemHandle(iItemDefinitionIndex, wep.replaceIndex, wep.sAttrib);
 
-			if (hItemOverride != null) // if it's null then :(
+			if (hItemOverride != null)
 			{
 				hItem = hItemOverride;
 				return Plugin_Changed;
@@ -148,26 +144,24 @@ stock Handle PrepareItemHandle(int defIndex, int replaceIndex, const char[] sAtt
 		count = TF2Attrib_GetStaticAttribs(replaceIndex, attribId, attribVal);
 		count /= 2;
 	}
-	else if(defIndex != 998) // we are not preserving attributes for vaccinator
-	{
-		flags |= PRESERVE_ATTRIBUTES;
-	}
+	else if (defIndex != 998)
+		flags |= PRESERVE_ATTRIBUTES; // Do not preserve attributes of Vaccinator
 
-	if(attribCount > 1)
+	if (attribCount > 1)
 	{
-		for (int i2 = 0; i2 < attribCount; i2+=2)
+		for (int i2 = 0; i2 < attribCount; i2 += 2)
 		{
 			bool dontAdd = false;
-			for(int j = 0; j < count; j++)
+			for (int j = 0; j < count; j++)
 			{
-				if(attribId[j] == StringToInt(weaponAttribsArray[i2]))
+				if (attribId[j] == StringToInt(weaponAttribsArray[i2]))
 				{
 					dontAdd = true;
 					break;
 				}		
 			}
 
-			if(dontAdd)
+			if (dontAdd)
 				continue;
 
 			attribId[count] = StringToInt(weaponAttribsArray[i2]);
