@@ -169,6 +169,7 @@ public void OnPluginStart()
 	// Translations
 	LoadTranslations("common.phrases");
 
+	// Prepare weapons array list
 	Weapons_Initialise();
 }
 
@@ -178,6 +179,7 @@ public void OnPluginStart()
 public void OnMapStart()
 {
 	roundStarted = false;
+	waitingForPlayers = true;
 
 	// Standard sounds precaching
 	PrecacheSound("replay/replaydialog_warn.wav");
@@ -326,11 +328,6 @@ Action Timer_DisplayIntro(Handle timer, int client)
 /* Round initialisation
 ==================================================================================================== */
 
-public void TF2_OnWaitingForPlayersStart()
-{
-	waitingForPlayers = true;
-}
-
 public void TF2_OnWaitingForPlayersEnd()
 {
 	waitingForPlayers = false;
@@ -472,33 +469,37 @@ public Action CountdownSetup(Handle timer)
 	if (roundTimer < 0)
 	{
 		roundTimerHandle = null;
-		Event event = CreateEvent("teamplay_setup_finished");
-		event.Fire();
-
-		if (autoHandleDoors)
+		
+		if (!waitingForPlayers)
 		{
-			int ent = -1;
-			while ((ent = FindEntityByClassname(ent, "func_door")) != -1)
+			Event event = CreateEvent("teamplay_setup_finished");
+			event.Fire();
+
+			if (autoHandleDoors)
 			{
-				AcceptEntityInput(ent, "Unlock");
-				AcceptEntityInput(ent, "Open");
-				AcceptEntityInput(ent, "Lock");
-			}
-			ent = -1;
-			while ((ent = FindEntityByClassname(ent, "prop_dynamic")) != -1)
-			{
-				char tName[64];
-				GetEntPropString(ent, Prop_Data, "m_iName", tName, sizeof(tName));
-				if (StrContains(tName, "door", false) != -1 || StrContains(tName, "gate", false) != -1)
+				int ent = -1;
+				while ((ent = FindEntityByClassname(ent, "func_door")) != -1)
 				{
-					SetVariantString("open");
-					AcceptEntityInput(ent, "SetAnimation");
+					AcceptEntityInput(ent, "Unlock");
+					AcceptEntityInput(ent, "Open");
+					AcceptEntityInput(ent, "Lock");
 				}
-			}
-			ent = -1;
-			while ((ent = FindEntityByClassname(ent, "trigger_multiple")) != -1)
-			{
-				AcceptEntityInput(ent, "Disable");
+				ent = -1;
+				while ((ent = FindEntityByClassname(ent, "prop_dynamic")) != -1)
+				{
+					char tName[64];
+					GetEntPropString(ent, Prop_Data, "m_iName", tName, sizeof(tName));
+					if (StrContains(tName, "door", false) != -1 || StrContains(tName, "gate", false) != -1)
+					{
+						SetVariantString("open");
+						AcceptEntityInput(ent, "SetAnimation");
+					}
+				}
+				ent = -1;
+				while ((ent = FindEntityByClassname(ent, "trigger_multiple")) != -1)
+				{
+					AcceptEntityInput(ent, "Disable");
+				}
 			}
 		}
 
@@ -522,14 +523,18 @@ public Action CountdownRound(Handle timer)
 	if (roundTimer < 0)
 	{
 		roundTimerHandle = null;
-		switch (roundType)
+		
+		if (!waitingForPlayers)
 		{
-			case Game_Attack:
-				ForceWin(TEAM_ZOMBIES);
-			case Game_Defend:
-				ForceWin(TEAM_SURVIVORS);
-			case Game_Survival:
-				ForceWin(TEAM_SURVIVORS);
+			switch (roundType)
+			{
+				case Game_Attack:
+					ForceWin(TEAM_ZOMBIES);
+				case Game_Defend:
+					ForceWin(TEAM_SURVIVORS);
+				case Game_Survival:
+					ForceWin(TEAM_SURVIVORS);
+			}
 		}
 		return Plugin_Stop;
 	}
@@ -755,7 +760,7 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 
 Action Listener_JoinClass(int client, const char[] command, int args)
 {
-	if(!args)
+	if (!args)
 		return Plugin_Continue;
 
 	char chosenClass[32];
@@ -766,8 +771,10 @@ Action Listener_JoinClass(int client, const char[] command, int args)
 		if (!setupTime && IsPlayerAlive(client))
 			return Plugin_Handled;
 
-		// TODO: Need to allow survivor to switch to their own class
-		if (!IsAllowedClass(client, TF2_GetClass(chosenClass)))
+		// Allow survivor to switch to their own class but not to one occupied by someone else
+		if (TF2_GetPlayerClass(client) == TF2_GetClass(chosenClass))
+			return Plugin_Continue;
+		else if (!IsAllowedClass(client, TF2_GetClass(chosenClass)))
 		{
 			CPrintToChat(client, "%s {haunted}You cannot be a class that someone else on the survivor team already is.", MESSAGE_PREFIX);
 			EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
@@ -1092,8 +1099,8 @@ public Action Command_Class(int client, int args)
 	TFClassType class;
 	if(!args)
 	{
+	if (!args)
 		class = TF2_GetPlayerClass(client);
-	}
 	else
 	{
 		char arg[32];
