@@ -10,6 +10,11 @@ enum struct WeaponConfig
 
 stock void Weapons_Initialise()
 {
+	g_aWeapons = new ArrayList(sizeof(WeaponConfig));
+}
+
+stock void Weapons_Refresh()
+{
 	char sPath[128], section[512];
 	BuildPath(Path_SM, sPath, sizeof(sPath), "configs/zs2_weapons.cfg");
 	if (!FileExists(sPath))
@@ -18,9 +23,9 @@ stock void Weapons_Initialise()
 		return;
 	}
 
-	g_aWeapons = new ArrayList(sizeof(WeaponConfig));
-	KeyValues kv = new KeyValues("TF2_ZS2_WEAPONS");
+	g_aWeapons.Clear();
 
+	KeyValues kv = new KeyValues("TF2_ZS2_WEAPONS");
 	kv.ImportFromFile(sPath);
 	kv.GotoFirstSubKey();
 	do 
@@ -33,7 +38,13 @@ stock void Weapons_Initialise()
 		{
 			count = ExplodeString(section, " ; ", strings, sizeof(strings), sizeof(strings[]));
 		}
-		else
+		else 
+		{
+			count = 1;
+			strcopy(strings[0], sizeof(strings[]), section);
+		}
+
+		for(int i = 0; i < count; i++)
 		{
 			count = 1;
 			strcopy(strings[0], sizeof(strings[]), section);
@@ -43,7 +54,7 @@ stock void Weapons_Initialise()
 		{
 			int iIndex = StringToInt(strings[i]);
 			WeaponConfig weapon;
-			weapon.defIndex = iIndex;
+			weapon.defIndex = StringToInt(strings[i]);
 			weapon.replaceIndex = kv.GetNum("replace", -1);
 			kv.GetString("attributes", weapon.sAttrib, sizeof(weapon.sAttrib), "");
 			if (weapon.replaceIndex != -1)
@@ -148,7 +159,7 @@ public Action TF2Items_OnGiveNamedItem(int client, char[] classname, int iItemDe
 			return Plugin_Handled;
 		}
 	}
-
+	
 	for (int i = 0; i < g_aWeapons.Length; i++)
 	{
 		WeaponConfig wep;
@@ -156,10 +167,67 @@ public Action TF2Items_OnGiveNamedItem(int client, char[] classname, int iItemDe
 
 		if (wep.defIndex == iItemDefinitionIndex)
 		{
-			hItem = wep.hWeapon;
-			return Plugin_Changed;
+			Handle hItemOverride = PrepareItemHandle(iItemDefinitionIndex, wep.replaceIndex, wep.sAttrib);
+
+			if (hItemOverride != null) // if it's null then :(
+			{
+				hItem = hItemOverride;
+				return Plugin_Changed;
+			}
+		}
+	}
+	
+	return Plugin_Continue;
+}
+
+stock Handle PrepareItemHandle(int defIndex, int replaceIndex, const char[] sAttrib)
+{
+	static Handle hWeapon = null;
+	int flags = OVERRIDE_ATTRIBUTES, count = 0;
+	int attribId[16];
+	float attribVal[16];
+	char weaponAttribsArray[32][32];
+	int attribCount = ExplodeString(sAttrib, " ; ", weaponAttribsArray, 32, 32);
+
+	if (hWeapon == null)
+		hWeapon = TF2Items_CreateItem(flags);
+	else 
+		TF2Items_SetFlags(hWeapon, flags);
+
+	if (replaceIndex != -1)
+	{
+		flags |= OVERRIDE_ITEM_DEF;
+		TF2Items_SetItemIndex(hWeapon, replaceIndex);
+
+		flags |= OVERRIDE_CLASSNAME;
+		char classname[128];
+		TF2Econ_GetItemClassName(replaceIndex, classname, sizeof(classname));
+		TF2Items_SetClassname(hWeapon, classname);
+
+		count = TF2Attrib_GetStaticAttribs(replaceIndex, attribId, attribVal);
+		count /= 2;
+	}
+	else if (defIndex != 998) // we are not preserving attributes for vaccinator
+	{
+		flags |= PRESERVE_ATTRIBUTES;
+	}
+
+	if (attribCount > 1)
+	{
+		for (int i = count, i2 = 0; i < 16 && i2 < attribCount; i++, i2+=2)
+		{
+			attribId[i] = StringToInt(weaponAttribsArray[i2]);
+			attribVal[i] = StringToFloat(weaponAttribsArray[i2 + 1]);
+			count++;
 		}
 	}
 
-	return Plugin_Continue;
+	TF2Items_SetNumAttributes(hWeapon, count);
+	for (int i = 0; i < count; i++)
+	{
+		TF2Items_SetAttribute(hWeapon, i, attribId[i], attribVal[i]);
+	}
+
+	TF2Items_SetFlags(hWeapon, flags);
+	return hWeapon;
 }

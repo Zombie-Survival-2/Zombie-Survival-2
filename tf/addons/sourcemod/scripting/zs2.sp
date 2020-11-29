@@ -36,36 +36,14 @@ public Plugin myinfo = {
 	url = "https://github.com/Zombie-Survival-2"
 };
 
-// Standard variables
 enum
 {
-	TEAM_SPEC = 1,
-	TEAM_RED = 2,
-	TEAM_BLUE = 3
+	TEAM_UNASSIGNED,
+	TEAM_SPEC,
+	TEAM_RED,
+	TEAM_BLUE
 };
-bool setupTime,
-	roundStarted,
-	regenAgain[MAXPLAYERS+1],
-	waitingForPlayers,
-	selectedAsSurvivor[MAXPLAYERS+1];
-int roundTimer,
-	TEAM_SURVIVORS,
-	TEAM_ZOMBIES,
-	queuePoints[MAXPLAYERS+1],
-	damageDealt[MAXPLAYERS+1],
-	g_LastButtons[MAXPLAYERS+1],
-	jumpCount[MAXPLAYERS+1];
-public const char objectiveEntities[6][32] = {
-	"team_control_point_master",
-	"team_control_point",
-	"trigger_capture_area",
-	"item_teamflag",
-	"func_capturezone",
-	"mapobj_cart_dispenser"
-};
-Handle roundTimerHandle;
 
-// Round type variables
 enum RoundType
 {
 	Game_Attack,
@@ -74,36 +52,46 @@ enum RoundType
 	// Game_Waves,
 	// Game_Scavenge
 };
-public const char roundTypeStrings[3][] = {
-	"Attack",
-	"Defend",
-	"Survival"
-	// "Waves",
-	// "Scavenge"
-};
+
+bool setupTime;
+bool roundStarted;
+bool waitingForPlayers;
+bool attackTeamSwap;
+bool autoHandleDoors;
+bool freezeInSetup;
+bool selectedAsSurvivor[MAXPLAYERS+1];
+
+int roundTimer;
+int	TEAM_SURVIVORS;
+int	TEAM_ZOMBIES;
+int	objectiveBonus;
+int	roundDuration;
+int	roundDurationCP;
+int	setupDuration;
+int	queuePoints[MAXPLAYERS+1];
+int	damageDealt[MAXPLAYERS+1];
+int	g_LastButtons[MAXPLAYERS+1];
+int	jumpCount[MAXPLAYERS+1];
+
+char objectiveEntities[][] = { "team_control_point_master", "team_control_point", "trigger_capture_area", "item_teamflag", "func_capturezone", "mapobj_cart_dispenser"};
+char roundTypeStrings[][] = { "Attack", "Defend", "Survival" /*"Waves", "Scavenge"*/};
+char introCP[64];
+char introST[64];	
+
+ConVar smDebug;
+ConVar smTeamRatio;
+ConVar smTeamMax;
+ConVar smPointsDamage;
+ConVar smPointsTime;
+ConVar smPointsWhilePlaying;
+ConVar smPointsOnKill;
+ConVar smPointsOnAssist;
+
+Handle roundTimerHandle;
+
 RoundType roundType;
 
-// JSON-controlled variables
-bool attackTeamSwap,
-	autoHandleDoors,
-	freezeInSetup;
-int objectiveBonus,
-	roundDuration,
-	roundDurationCP,
-	setupDuration;
-char introCP[64],
-	introST[64];
 ArrayList allowedRoundTypes;
-
-// ConVars
-ConVar smDebug,
-	smTeamRatio,
-	smTeamMax,
-	smPointsDamage,
-	smPointsTime,
-	smPointsWhilePlaying,
-	smPointsOnKill,
-	smPointsOnAssist;
 
 // Method includes
 #include "zs2/cp.sp"
@@ -180,6 +168,8 @@ public void OnPluginStart()
 
 	// Translations
 	LoadTranslations("common.phrases");
+
+	Weapons_Initialise();
 }
 
 /* Map initialisation + server tags
@@ -234,7 +224,7 @@ public void OnMapStart()
 	delete roundTimerHandle;
 	
 	// Read weapons CFG file
-	Weapons_Initialise();
+	Weapons_Refresh();
 	
 	// Read JSON file and set related variables
 	Maps_Initialise();
@@ -638,13 +628,15 @@ public int GameVote(NativeVote vote, MenuAction action, int param1, int param2)
 			allowedRoundTypes.GetString(i, strval, sizeof(strval));
 			vote.DisplayPassCustom("Round type set to %s", strval);
 			CPrintToChatAll("%s {haunted}The next round type will be {normal}%s {haunted}(%d/%d).", MESSAGE_PREFIX, strval, votes, totalVotes);
-			int j = 0;
-			for ( ; j < sizeof(roundTypeStrings); j++)
+
+			for (int j = 0; j < sizeof(roundTypeStrings); j++)
 			{
 				if (StrEqual(roundTypeStrings[j], strval))
+				{
+					roundType = view_as<RoundType>(j);
 					break;
+				}
 			}
-			roundType = view_as<RoundType>(j);
 		}
 	}
 }
@@ -922,14 +914,6 @@ Action Event_OnRegen(Event event, const char[] name, bool dontBroadcast)
 		return;
 	}
 
-	if (!regenAgain[player])
-	{
-		regenAgain[player] = true;
-		TF2_RegeneratePlayer(player);
-		return;
-	}
-
-	regenAgain[player] = false;
 	WeaponCheck(player);
 }
 
@@ -1112,6 +1096,8 @@ public Action Command_Class(int client, int args)
 	}
 
 	TFClassType class;
+	if(!args)
+	{
 	if (!args)
 		class = TF2_GetPlayerClass(client);
 	else
@@ -1209,7 +1195,7 @@ public Action AdminCommand_MaxPoints(int client, int args)
 
 public Action AdminCommand_ReloadConfig(int client, int args)
 {
-	Weapons_Initialise();
+	Weapons_Refresh();
 	return Plugin_Handled;
 }
 
