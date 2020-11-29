@@ -169,6 +169,7 @@ public void OnPluginStart()
 	// Translations
 	LoadTranslations("common.phrases");
 
+	// Prepare weapons array list
 	Weapons_Initialise();
 }
 
@@ -1292,7 +1293,7 @@ void ForceWin(int team)
 /* Debug output
 ==================================================================================================== */
 
-void DebugText(const char[] text, any ...) {
+public void DebugText(const char[] text, any ...) {
 	if (smDebug.BoolValue) {
 		int len = strlen(text) + 255;
 		char[] format = new char[len];
