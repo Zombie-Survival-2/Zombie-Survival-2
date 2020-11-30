@@ -7,6 +7,7 @@ enum struct WeaponConfig
 	int defIndex;
 	int replaceIndex;
 	char sAttrib[256];
+	bool deleteAttrib;
 }
 
 stock void Weapons_Initialise()
@@ -50,6 +51,7 @@ stock void Weapons_Refresh()
 			WeaponConfig weapon;
 			weapon.defIndex = StringToInt(strings[i]);
 			weapon.replaceIndex = kv.GetNum("replace", -1);
+			weapon.deleteAttrib = view_as<bool>(kv.GetNum("deleteAttribs", 0));
 			kv.GetString("attributes", weapon.sAttrib, sizeof(weapon.sAttrib), "");
 			g_aWeapons.PushArray(weapon);
 		}
@@ -108,7 +110,7 @@ public Action TF2Items_OnGiveNamedItem(int client, char[] classname, int iItemDe
 
 		if (wep.defIndex == iItemDefinitionIndex)
 		{
-			Handle hItemOverride = PrepareItemHandle(iItemDefinitionIndex, wep.replaceIndex, wep.sAttrib);
+			Handle hItemOverride = PrepareItemHandle(client, iItemDefinitionIndex, wep.replaceIndex, wep.sAttrib, wep.deleteAttrib);
 
 			if (hItemOverride != null) // if it's null then :(
 			{
@@ -121,12 +123,10 @@ public Action TF2Items_OnGiveNamedItem(int client, char[] classname, int iItemDe
 	return Plugin_Continue;
 }
 
-stock Handle PrepareItemHandle(int defIndex, int replaceIndex, const char[] sAttrib)
+stock Handle PrepareItemHandle(int client, int defIndex, int replaceIndex, const char[] sAttrib, bool deleteAttrib)
 {
 	static Handle hWeapon = null;
-	int flags = OVERRIDE_ATTRIBUTES, count = 0;
-	int attribId[16];
-	float attribVal[16];
+	int flags = OVERRIDE_ATTRIBUTES;
 	char weaponAttribsArray[32][32];
 	int attribCount = ExplodeString(sAttrib, " ; ", weaponAttribsArray, 32, 32);
 
@@ -143,44 +143,27 @@ stock Handle PrepareItemHandle(int defIndex, int replaceIndex, const char[] sAtt
 		flags |= OVERRIDE_CLASSNAME;
 		char classname[128];
 		TF2Econ_GetItemClassName(replaceIndex, classname, sizeof(classname));
+		TF2Econ_TranslateWeaponEntForClass(classname, sizeof(classname), TF2_GetPlayerClass(client));
 		TF2Items_SetClassname(hWeapon, classname);
-
-		count = TF2Attrib_GetStaticAttribs(replaceIndex, attribId, attribVal);
-		count /= 2;
 	}
-	else if(defIndex != 998) // we are not preserving attributes for vaccinator
+	else if(!deleteAttrib) // if we are not changing weapon and we save attributes
 	{
 		flags |= PRESERVE_ATTRIBUTES;
 	}
 
-	if(attribCount > 1)
+	if(1 < attribCount < 32)
 	{
-		for (int i2 = 0; i2 < attribCount; i2+=2)
+		TF2Items_SetNumAttributes(hWeapon, attribCount / 2);
+		int count;
+
+		for (int i2 = 0; i2 < attribCount; i2 += 2)
 		{
-			bool dontAdd = false;
-			for(int j = 0; j < count; j++)
-			{
-				if(attribId[j] == StringToInt(weaponAttribsArray[i2]))
-				{
-					attribVal[j] = StringToFloat(weaponAttribsArray[i2+1]);
-					dontAdd = true;
-					break;
-				}		
-			}
-
-			if(dontAdd)
-				continue;
-
-			attribId[count] = StringToInt(weaponAttribsArray[i2]);
-			attribVal[count] = StringToFloat(weaponAttribsArray[i2 + 1]);
-			count++;
+			TF2Items_SetAttribute(hWeapon, count++, StringToInt(weaponAttribsArray[i2]), StringToFloat(weaponAttribsArray[i2 + 1]));
 		}
 	}
-
-	TF2Items_SetNumAttributes(hWeapon, count);
-	for (int i = 0; i < count; i++)
+	else 
 	{
-		TF2Items_SetAttribute(hWeapon, i, attribId[i], attribVal[i]);
+		TF2Items_SetNumAttributes(hWeapon, 0);
 	}
 
 	TF2Items_SetFlags(hWeapon, flags);
