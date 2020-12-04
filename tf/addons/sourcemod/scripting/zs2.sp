@@ -74,7 +74,7 @@ int	g_LastButtons[MAXPLAYERS+1];
 int	jumpCount[MAXPLAYERS+1];
 
 char objectiveEntities[][] = { "team_control_point_master", "team_control_point", "trigger_capture_area", "item_teamflag", "func_capturezone", "mapobj_cart_dispenser"};
-char roundTypeStrings[][] = { "Attack", "Defend", "Survival" /*"Waves", "Scavenge"*/};
+char roundTypeStrings[][] = { "Attack", "Defend", "Survival" /* "Waves", "Scavenge" */ };
 char introCP[64];
 char introST[64];	
 
@@ -107,9 +107,7 @@ ArrayList allowedRoundTypes;
 public void OnPluginStart()
 {
 	if (GetEngineVersion() != Engine_TF2)
-	{
 		SetFailState("This game mode can only run on a Team Fortress 2 Dedicated Server.");
-	}
 
 	// Events
 	HookEvent("building_healed", Event_OnHealBuilding);
@@ -153,11 +151,14 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_zs_class", Command_Class);
 	RegConsoleCmd("sm_zs2class", Command_Class);
 	RegConsoleCmd("sm_zs2_class", Command_Class);
-	RegAdminCmd("sm_zs_reloadconfig", AdminCommand_ReloadConfig, ADMFLAG_CONFIG);
 	RegAdminCmd("sm_zsmaxpoints", AdminCommand_MaxPoints, ADMFLAG_ROOT);
 	RegAdminCmd("sm_zs_maxpoints", AdminCommand_MaxPoints, ADMFLAG_ROOT);
 	RegAdminCmd("sm_zs2maxpoints", AdminCommand_MaxPoints, ADMFLAG_ROOT);
 	RegAdminCmd("sm_zs2_maxpoints", AdminCommand_MaxPoints, ADMFLAG_ROOT);
+	RegAdminCmd("sm_zsreload", AdminCommand_ReloadConfig, ADMFLAG_CONFIG);
+	RegAdminCmd("sm_zs_reload", AdminCommand_ReloadConfig, ADMFLAG_CONFIG);
+	RegAdminCmd("sm_zs2reload", AdminCommand_ReloadConfig, ADMFLAG_CONFIG);
+	RegAdminCmd("sm_zs2_reload", AdminCommand_ReloadConfig, ADMFLAG_CONFIG);
 
 	// Listeners
 	AddCommandListener(Listener_Build, "build");
@@ -178,6 +179,7 @@ public void OnPluginStart()
 public void OnMapStart()
 {
 	roundStarted = false;
+	waitingForPlayers = true;
 
 	// Standard sounds precaching
 	PrecacheSound("replay/replaydialog_warn.wav");
@@ -227,6 +229,9 @@ public void OnMapStart()
 	
 	// Read JSON file and set related variables
 	Maps_Initialise();
+	
+	// Playtime points timer
+	CreateTimer(smPointsTime.FloatValue, Timer_PlaytimePoints, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public void OnEntityCreated(int entity, const char[] classname)
@@ -237,7 +242,8 @@ public void OnEntityCreated(int entity, const char[] classname)
 		AcceptEntityInput(entity, "Kill");
 }
 
-public void OnGameFrame() {
+public void OnGameFrame()
+{
 	int entity = -1;
 	while ((entity = FindEntityByClassname(entity, "obj_sentrygun")) != -1) {
 		SetEntProp(entity, Prop_Send, "m_iUpgradeMetal", 0);
@@ -296,9 +302,15 @@ void InsertServerTag(const char[] tagToInsert)
 
 public void OnClientPutInServer(int client)
 {
-	CreateTimer(15.0, Timer_DisplayIntro, client);
+	CreateTimer(10.0, Timer_DisplayIntro, client);
 	SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
 	SDKHook(client, SDKHook_WeaponSwitch, OnWeaponSwitch);
+	// Force player to spawn so they are not stuck dead
+	if (waitingForPlayers)
+		TF2_ChangeClientTeam(client, TFTeam_Red);
+	else
+		TF2_ChangeClientTeam(client, TFTeam_Blue);
+	PickClass(client);
 }
 
 public void OnClientDisconnect(int client)
@@ -326,17 +338,9 @@ Action Timer_DisplayIntro(Handle timer, int client)
 /* Round initialisation
 ==================================================================================================== */
 
-public void TF2_OnWaitingForPlayersStart()
-{
-	waitingForPlayers = true;
-}
-
 public void TF2_OnWaitingForPlayersEnd()
 {
 	waitingForPlayers = false;
-	
-	// Playtime points timer
-	CreateTimer(smPointsTime.FloatValue, Timer_PlaytimePoints, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
 
 void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
@@ -381,9 +385,7 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 	{
 		int player = GetClientWithMostQueuePoints(selectedAsSurvivor);
 		if (!player)
-		{
 			break;
-		}
 
 		Survivor_Setup(player);
 		CPrintToChat(player, "%s {haunted}You have been selected to become a {normal}Survivor. {haunted}Your queue points have been reset.", MESSAGE_PREFIX);
@@ -755,7 +757,7 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 
 Action Listener_JoinClass(int client, const char[] command, int args)
 {
-	if(!args)
+	if (!args)
 		return Plugin_Continue;
 
 	char chosenClass[32];
@@ -766,8 +768,10 @@ Action Listener_JoinClass(int client, const char[] command, int args)
 		if (!setupTime && IsPlayerAlive(client))
 			return Plugin_Handled;
 
-		// TODO: Need to allow survivor to switch to their own class
-		if (!IsAllowedClass(client, TF2_GetClass(chosenClass)))
+		// Allow survivor to switch to their own class but not to one occupied by someone else
+		if (TF2_GetPlayerClass(client) == TF2_GetClass(chosenClass))
+			return Plugin_Continue;
+		else if (!IsAllowedClass(client, TF2_GetClass(chosenClass)))
 		{
 			CPrintToChat(client, "%s {haunted}You cannot be a class that someone else on the survivor team already is.", MESSAGE_PREFIX);
 			EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
@@ -938,14 +942,10 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 			{
 				RequestFrame(Zombie_Setup, victim);
 				if (survivorsLiving == 1)
-				{
 					EmitSoundToAll("zs2/oneleft.mp3", survAlive);
-				}
 			}
 			else
-			{
 				ForceWin(TEAM_ZOMBIES);
-			}
 		}
 
 		if (attacker < 1 || !IsValidClient(attacker) || victim == attacker)
@@ -956,7 +956,6 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 		if (team == TEAM_SURVIVORS)
 		{
 			queuePoints[attacker] += smPointsOnKill.IntValue;
-
 			if (assister && IsValidClient(assister))
 				queuePoints[assister] += smPointsOnAssist.IntValue;
 		}
@@ -1090,10 +1089,8 @@ public Action Command_Class(int client, int args)
 	}
 
 	TFClassType class;
-	if(!args)
-	{
+	if (!args)
 		class = TF2_GetPlayerClass(client);
-	}
 	else
 	{
 		char arg[32];
