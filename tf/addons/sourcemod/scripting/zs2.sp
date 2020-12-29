@@ -20,6 +20,7 @@
 /* Global variables and plugin information
 ==================================================================================================== */
 
+
 // Defines
 #define MESSAGE_PREFIX "{collectors}[ZS2]"
 #define MESSAGE_PREFIX_NO_COLOR "[ZS2]"
