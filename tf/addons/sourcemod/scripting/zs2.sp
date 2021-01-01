@@ -896,12 +896,17 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 					{
 						// Need a way to stop this sound when the round is over
 						if (IsValidClient(i))
-							EmitSoundToClient(i, "zs2/oneleft.mp3", i);
+							EmitSoundToClient(i, "zs2/oneleft.mp3", i, 1);
 					}
 				}
 			}
 			else
 			{
+				for (int i = 1; i <= MaxClients; i++)
+					{
+						if (IsValidClient(i))
+							StopSound(i, 1, "zs2/oneleft.mp3");
+					}
 				ForceWin(TEAM_ZOMBIES);
 			}
 		}
