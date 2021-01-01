@@ -653,11 +653,7 @@ void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 	{
 		if (IsValidClient(i))
 		{
-			for (int i = 1; i <= MaxClients; i++)
-					{
-						if (IsValidClient(i))
-							StopSound(i, SNDCHAN_AUTO, "zs2/oneleft.mp3");
-					}
+			StopSound(i, SNDCHAN_AUTO, "zs2/oneleft.mp3");
 			selectedAsSurvivor[i] = false;
 			damageDealt[i] = 0;
 
