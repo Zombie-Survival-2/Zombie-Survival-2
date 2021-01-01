@@ -895,7 +895,6 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 				{
 					for (int i = 1; i <= MaxClients; i++)
 					{
-						// Need a way to stop this sound when the round is over
 						if (IsValidClient(i))
 							EmitSoundToClient(i, "zs2/oneleft.mp3", i, SNDCHAN_AUTO);
 					}
