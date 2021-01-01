@@ -310,7 +310,6 @@ public void OnClientPutInServer(int client)
 		TF2_ChangeClientTeam(client, TFTeam_Red);
 	else
 		TF2_ChangeClientTeam(client, TFTeam_Blue);
-	PickClass(client);
 }
 
 public void OnClientDisconnect(int client)
