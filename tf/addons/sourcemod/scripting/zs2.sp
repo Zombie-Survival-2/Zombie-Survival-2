@@ -700,7 +700,18 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 	
 	if (StrContains(chosenTeam, "red", false) > -1 && roundStarted)
 	{
+		TFClassType clientClass = TF2_GetPlayerClass(client);
 		EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
+		TF2_ChangeClientTeam(client, TFTeam_Blue);
+		if(clientClass == TFClass_Unknown)
+		{
+			TFClassType randomClass = view_as<TFClassType>(GetRandomInt(view_as<int>(TFClass_Scout), view_as<int>(TFClass_Engineer)));
+			TF2_SetPlayerClass(client, randomClass);
+		}
+		else
+		{
+			TF2_SetPlayerClass(client, clientClass);
+		}
 		return Plugin_Handled;
 	}
 
