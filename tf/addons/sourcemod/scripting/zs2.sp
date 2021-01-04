@@ -20,6 +20,7 @@
 /* Global variables and plugin information
 ==================================================================================================== */
 
+
 // Defines
 #define MESSAGE_PREFIX "{collectors}[ZS2]"
 #define MESSAGE_PREFIX_NO_COLOR "[ZS2]"
@@ -650,6 +651,7 @@ void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 	{
 		if (IsValidClient(i))
 		{
+			StopSound(i, SNDCHAN_AUTO, "zs2/oneleft.mp3");
 			selectedAsSurvivor[i] = false;
 			damageDealt[i] = 0;
 
@@ -698,7 +700,18 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 
 	if (setupTime)
 	{
-		CPrintToChat(client, "%s {haunted}No team switch during setup time.", MESSAGE_PREFIX);
+		TFClassType clientClass = TF2_GetPlayerClass(client);
+		EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
+		TF2_ChangeClientTeam(client, TFTeam_Blue);
+		if(clientClass == TFClass_Unknown)
+		{
+			TFClassType randomClass = view_as<TFClassType>(GetRandomInt(view_as<int>(TFClass_Scout), view_as<int>(TFClass_Engineer)));
+			TF2_SetPlayerClass(client, randomClass);
+		}
+		else
+		{
+			TF2_SetPlayerClass(client, clientClass);
+		}
 		return Plugin_Handled;
 	}
 	
@@ -941,7 +954,13 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 			{
 				RequestFrame(Zombie_Setup, victim);
 				if (survivorsLiving == 1)
-					EmitSoundToAll("zs2/oneleft.mp3", survAlive);
+				{
+					for (int i = 1; i <= MaxClients; i++)
+					{
+						if (IsValidClient(i))
+							EmitSoundToClient(i, "zs2/oneleft.mp3", i, SNDCHAN_AUTO);
+					}
+				}
 			}
 			else
 				ForceWin(TEAM_ZOMBIES);
