@@ -698,12 +698,13 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 	if (!IsValidClient(client))
 		return Plugin_Continue;
 
+	/* This code is to be merged with the roundStarted section below. It is important that randomly allocated classes obey the class restrictions that we have set in place.
 	if (setupTime)
 	{
 		TFClassType clientClass = TF2_GetPlayerClass(client);
 		EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
 		TF2_ChangeClientTeam(client, TFTeam_Blue);
-		if(clientClass == TFClass_Unknown)
+		if (clientClass == TFClass_Unknown)
 		{
 			TFClassType randomClass = view_as<TFClassType>(GetRandomInt(view_as<int>(TFClass_Scout), view_as<int>(TFClass_Engineer)));
 			TF2_SetPlayerClass(client, randomClass);
@@ -714,6 +715,7 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 		}
 		return Plugin_Handled;
 	}
+	*/
 	
 	// Get command/arg on which team player joined
 	if (StrEqual(command, "jointeam", false)) // "jointeam spectate" takes priority
@@ -739,12 +741,24 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 	
 	if (roundStarted)
 	{
-		// If client tries to join survivor team or random team, place them on zombie team with zombie class select
+		// If client tries to join survivor team or random team
 		if (StrEqual(sArg, survTeam, false) || StrEqual(sArg, "auto", false))
 		{
-			ChangeClientTeam(client, TEAM_ZOMBIES);
-			ShowVGUIPanel(client, vgui);
-			CPrintToChat(client, "%s {haunted}You cannot be survivor, forced to join zombie team.", MESSAGE_PREFIX);
+			// Show survivor class select if player is already a survivor
+			if (GetClientTeam(client) == TEAM_SURVIVORS)
+				ShowVGUIPanel(client, vgui);
+			else
+			{
+				// Place player on zombie team with zombie class select
+				ChangeClientTeam(client, TEAM_ZOMBIES);
+				ShowVGUIPanel(client, vgui);
+				// Complain to the player if they tried joining survivor team
+				if (StrEqual(sArg, survTeam, false))
+				{
+					EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
+					CPrintToChat(client, "%s {haunted}You cannot be survivor, forced to join zombie team.", MESSAGE_PREFIX);
+				}
+			}
 			return Plugin_Handled;
 		}
 		// Let anyone join zombie team
@@ -755,13 +769,16 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 		// If client tries to join spectator, check their privileges
 		else if (StrEqual(sArg, "spectate", false))
 		{
+			// Client does not have permission to join spectator
 			if (!CheckCommandAccess(client, "", ADMFLAG_KICK, true))
+			{
+				EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
+				CPrintToChat(client, "%s {haunted}You do not have permission to spectate this game.", MESSAGE_PREFIX);
 				return Plugin_Handled;
-			
+			}
 			return Plugin_Continue;
 		}
-		else
-			return Plugin_Handled;
+		return Plugin_Handled;
 	}
 	
 	return Plugin_Continue;
@@ -940,13 +957,12 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 		{
 			EmitSoundToClient(victim, "zs2/death.mp3", victim);
 
-			int survivorsLiving = -1, survAlive;
+			int survivorsLiving = -1;
 			for (int i = 1; i <= MaxClients; i++)
 			{
 				if (IsValidClient(i) && GetClientTeam(i) == TEAM_SURVIVORS && IsPlayerAlive(i))
 				{
 					survivorsLiving++;
-					survAlive = i;
 				}
 			}
 
