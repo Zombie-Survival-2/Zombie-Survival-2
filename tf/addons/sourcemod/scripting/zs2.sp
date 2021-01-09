@@ -698,7 +698,6 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 	if (!IsValidClient(client))
 		return Plugin_Continue;
 
-	if (setupTime)
 	if (setupTime || roundStarted)
 	{
 		TFClassType clientClass = TF2_GetPlayerClass(client);
