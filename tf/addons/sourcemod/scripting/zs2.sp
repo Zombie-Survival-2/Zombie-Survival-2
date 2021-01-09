@@ -699,6 +699,7 @@ Action Listener_JoinTeam(int client, const char[] command, int args)
 		return Plugin_Continue;
 
 	if (setupTime)
+	if (setupTime || roundStarted)
 	{
 		TFClassType clientClass = TF2_GetPlayerClass(client);
 		EmitSoundToClient(client, "replay/replaydialog_warn.wav", client);
@@ -946,7 +947,7 @@ Action Event_OnDeath(Event event, const char[] name, bool dontBroadcast)
 				if (IsValidClient(i) && GetClientTeam(i) == TEAM_SURVIVORS && IsPlayerAlive(i))
 				{
 					survivorsLiving++;
-					survAlive = i;
+					//survAlive = i; use this in future TODO
 				}
 			}
 
