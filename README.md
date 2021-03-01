@@ -1,3 +1,5 @@
+**Zombie Survival 2 is no longer being developed as of March 1, 2021.**
+
 ![Zombie Survival 2](https://zombie-survival-2.github.io/images/logo.png)
 
 Zombie Survival 2 is a SourceMod plugin for Team Fortress 2 that features all-class action with multiple modes, inspired by the Left 4 Dead series. It comes with support for a wealth of official and custom maps available through JSON files, which any server owner can make themselves for other maps. Plugin contributors are listed in the [player manual](https://zombie-survival-2.github.io/index.html) accessible through the in-game MOTD.
